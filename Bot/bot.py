@@ -8,16 +8,18 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pymongo import MongoClient
 
+# External modules
+from readymade_accounts import register_readymade_accounts_handlers
+from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_CURRENCY, MIN_BALANCE_REQUIRED
-from mustjoin import check_join  # your existing join check
 
 # ===== MongoDB Setup =====
-MONGO_URI = "mongodb+srv://Sony:Sony123@sony0.soh6m14.mongodb.net/?retryWrites=true&w=majority"
+MONGO_URI = "mongodb+srv://Sony:Sony123@sony0.soh6m14.mongodb.net/?retryWrites=true&w=majority&appName=Sony0"
 client = MongoClient(MONGO_URI)
 db = client["QuickCodes"]
 users_col = db["users"]
-countries_col = db["countries"]  # stores price & stock
 orders_col = db["orders"]
+countries_col = db["countries"]  # New collection to store Telegram country stock & price
 
 # ===== Bot Setup =====
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -36,38 +38,56 @@ def is_admin(user_id: int) -> bool:
 
 # ===== START Command =====
 @dp.message(Command("start"))
-async def cmd_start(msg: Message):
-    if not await check_join(bot, msg):
+async def cmd_start(m: Message):
+    if not await check_join(bot, m):
         return
-    get_or_create_user(msg.from_user.id, msg.from_user.username)
+
+    get_or_create_user(m.from_user.id, m.from_user.username)
+
+    await m.answer("🧑‍💻")
+    text = (
+        "<b>Welcome to Bot – ⚡ Most Trusted and Fastest OTP Bot!</b>\n"
+        "<i><blockquote>📖 How to use Bot:</blockquote></i>\n"
+        "<blockquote expandable>1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Click on Purchase and 📩 Receive OTP</blockquote>\n"
+        "🚀 Enjoy Fast OTP Services<a href=\"https://files.catbox.moe/c1pxci.mp4\">!</a>"
+    )
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="🌍 Buy Telegram Account", callback_data="buy"),
-        InlineKeyboardButton(text="💵 Balance", callback_data="balance")
+        InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
+        InlineKeyboardButton(text="🛒 Buy Account", callback_data="buy")
     )
     kb.row(
-        InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto"),
+        InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/iamvalrik")
+    )
+    kb.row(
+        InlineKeyboardButton(text="FAKE BUTTON", url="tg://setting"),
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats")
     )
-    await msg.answer("⚡ Welcome to Telegram OTP Bot!", reply_markup=kb.as_markup())
+    kb.row(InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto"))
+    await m.answer(text, reply_markup=kb.as_markup())
 
 # ===== Balance =====
 @dp.callback_query(F.data == "balance")
-async def callback_balance(cq: CallbackQuery):
-    user = get_or_create_user(cq.from_user.id, cq.from_user.username)
-    await cq.answer(f"💰 Balance: ₹{user['balance']:.2f}", show_alert=True)
+async def show_balance(cq: CallbackQuery):
+    user = users_col.find_one({"_id": cq.from_user.id})
+    bal = user["balance"] if user else 0.0
+    await cq.answer(f"💰 Your balance: {bal:.2f} ₹", show_alert=True)
 
 @dp.message(Command("balance"))
 async def cmd_balance(msg: Message):
-    user = get_or_create_user(msg.from_user.id, msg.from_user.username)
-    await msg.answer(f"💰 Your balance: ₹{user['balance']:.2f}")
+    user = users_col.find_one({"_id": msg.from_user.id})
+    bal = user["balance"] if user else 0.0
+    await msg.answer(f"💰 Your balance: {bal:.2f} ₹")
 
-# ===== Purchase Flow =====
+# ===== Telegram Purchase Flow =====
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
-    countries = list(countries_col.find({}))
     kb = InlineKeyboardBuilder()
+    countries = list(countries_col.find({}))
+    if not countries:
+        return await cq.message.answer("❌ No countries available. Admin must add stock first.")
     for country in countries:
         kb.button(text=country["name"], callback_data=f"country:{country['name']}")
     kb.adjust(2)
@@ -113,11 +133,9 @@ async def callback_buy_now(cq: CallbackQuery):
     if country["stock"] <= 0:
         return await cq.answer("❌ Out of stock.", show_alert=True)
 
-    # Deduct balance and decrease stock
     users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -country["price"]}})
     countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
 
-    # Create order
     order_doc = {
         "user_id": user["_id"],
         "country": country_name,
@@ -153,60 +171,59 @@ async def cmd_add_stock(msg: Message):
     )
     await msg.answer(f"✅ {stock} accounts added for {country_name} at ₹{price} each.")
 
-# ===== HowTo =====
+# ===== Other Callbacks =====
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
-    if not await check_join(bot, cq.message):
-        return
+    if not await check_join(bot, cq.message): return
     await cq.message.answer(
-        "<b>📖 How to use Bot</b>\n"
-        "1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Click Buy\n4️⃣ Receive your Telegram Account\n\n"
-        "✅ Fast & Reliable!\nNeed help? DM @support"
+        "<b>📖 How to use QuickCodes Bot</b>\n1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Click Purchase and 📩 Receive OTP\n\n"
+        "✅ Done!\n🚀 Enjoy Fast OTP Services!\nNeed help? DM @Hehe_stalker"
     )
     await cq.answer()
 
 # ===== Stats =====
+@dp.message(Command("stats"))
+async def cmd_stats(msg: Message):
+    if not await check_join(bot, msg): return
+    user = users_col.find_one({"_id": msg.from_user.id})
+    if not user: return await msg.answer("❌ No data found for your account.")
+    text = (
+        f"📊 <b>Your Statistics</b>\n\n👤 Name: {msg.from_user.full_name}\n"
+        f"🔹 Username: @{msg.from_user.username or '—'}\n🆔 User ID: <code>{msg.from_user.id}</code>\n"
+        f"💰 Balance: ₹{user.get('balance', 0):.2f}\n"
+    )
+    await msg.answer(text, parse_mode="HTML")
+
 @dp.callback_query(F.data == "stats")
 async def callback_stats(cq: CallbackQuery):
-    user = get_or_create_user(cq.from_user.id, cq.from_user.username)
+    user = users_col.find_one({"_id": cq.from_user.id})
+    if not user: return await cq.answer("❌ No data found for your account.", show_alert=True)
     text = (
-        f"📊 <b>Your Statistics</b>\n\n"
-        f"👤 Name: {cq.from_user.full_name}\n"
-        f"🔹 Username: @{cq.from_user.username or '—'}\n"
-        f"🆔 User ID: <code>{cq.from_user.id}</code>\n"
+        f"📊 <b>Your Statistics</b>\n\n👤 Name: {cq.from_user.full_name}\n"
+        f"🔹 Username: @{cq.from_user.username or '—'}\n🆔 User ID: <code>{cq.from_user.id}</code>\n"
         f"💰 Balance: ₹{user.get('balance', 0):.2f}\n"
     )
     await cq.message.answer(text, parse_mode="HTML")
     await cq.answer()
 
-@dp.message(Command("stats"))
-async def cmd_stats(msg: Message):
-    user = get_or_create_user(msg.from_user.id, msg.from_user.username)
-    text = (
-        f"📊 <b>Your Statistics</b>\n\n"
-        f"👤 Name: {msg.from_user.full_name}\n"
-        f"🔹 Username: @{msg.from_user.username or '—'}\n"
-        f"🆔 User ID: <code>{msg.from_user.id}</code>\n"
-        f"💰 Balance: ₹{user.get('balance', 0):.2f}\n"
-    )
-    await msg.answer(text, parse_mode="HTML")
-
 # ===== Support =====
 @dp.message(Command("support"))
 async def cmd_support(msg: Message):
-    if not await check_join(bot, msg):
-        return
-    text = f"👋 Hey {msg.from_user.full_name},\n\nContact our support for help."
+    if not await check_join(bot, msg): return
+    text = f"👋 Hey {msg.from_user.full_name},\n\nIf you have any queries, feel free to contact our support."
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💬 Contact Support", url="https://t.me/hehe_stalker")],
         [InlineKeyboardButton(text="📖 Terms of Use", url="https://telegra.ph/Terms-of-Use--Quick-Codes-Bot-08-31")]
     ])
     await msg.answer(text, reply_markup=kb)
 
+# ===== Register external handlers =====
+register_readymade_accounts_handlers(dp=dp, bot=bot, users_col=users_col)
+
 # ===== Runner =====
 async def main():
     print("Bot started.")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
 
 if __name__ == "__main__":
     asyncio.run(main())

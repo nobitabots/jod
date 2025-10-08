@@ -1,13 +1,14 @@
 import asyncio
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import MONGODB_URI
+from pymongo.errors import ConfigurationError
 
 _client = AsyncIOMotorClient(MONGODB_URI)
 
-# Try to get default database, fallback to manual db name
-if _client.get_default_database():
+# Try to get the default database; fallback if not defined
+try:
     db = _client.get_default_database()
-else:
+except ConfigurationError:
     db = _client["telegramBot"]  # fallback default name
 
 # Collections

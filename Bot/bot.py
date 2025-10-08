@@ -7,19 +7,24 @@ from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pymongo import MongoClient
+from telethon.sync import TelegramClient
+from telethon.sessions import StringSession
 
 # External modules
 from readymade_accounts import register_readymade_accounts_handlers
 from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS, DEFAULT_CURRENCY, MIN_BALANCE_REQUIRED
 
+from otp_fetcher import fetch_otp_for_number  # Separate OTP fetching module
+
 # ===== MongoDB Setup =====
-MONGO_URI = "mongodb+srv://Sony:Sony123@sony0.soh6m14.mongodb.net/?retryWrites=true&w=majority&appName=Sony0"
+MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Sony:Sony123@sony0.soh6m14.mongodb.net/?retryWrites=true&w=majority&appName=Sony0"
 client = MongoClient(MONGO_URI)
 db = client["QuickCodes"]
 users_col = db["users"]
 orders_col = db["orders"]
-countries_col = db["countries"]  # New collection to store Telegram country stock & price
+countries_col = db["countries"]          # Country info + stock + price
+numbers_col = db["numbers"]              # Individual numbers with string sessions
 
 # ===== Bot Setup =====
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
@@ -36,7 +41,7 @@ def get_or_create_user(user_id: int, username: str | None):
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# ===== START Command =====
+# ===== START =====
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
     if not await check_join(bot, m):
@@ -44,54 +49,51 @@ async def cmd_start(m: Message):
 
     get_or_create_user(m.from_user.id, m.from_user.username)
 
-    await m.answer("🧑‍💻")
     text = (
-        "<b>Welcome to Bot – ⚡ Most Trusted and Fastest OTP Bot!</b>\n"
+        "<b>Welcome to Bot – ⚡ Fastest Telegram OTP Bot!</b>\n"
         "<i><blockquote>📖 How to use Bot:</blockquote></i>\n"
-        "<blockquote expandable>1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Click on Purchase and 📩 Receive OTP</blockquote>\n"
-        "🚀 Enjoy Fast OTP Services<a href=\"https://files.catbox.moe/c1pxci.mp4\">!</a>"
+        "1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Buy Account and 📩 Receive OTP\n"
+        "🚀 Enjoy Fast OTP Services!"
     )
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
-        InlineKeyboardButton(text="🛒 Buy Account", callback_data="buy")
+        InlineKeyboardButton("💵 Balance", callback_data="balance"),
+        InlineKeyboardButton("🛒 Buy Account", callback_data="buy")
     )
     kb.row(
-        InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/iamvalrik")
+        InlineKeyboardButton("💳 Recharge", callback_data="recharge"),
+        InlineKeyboardButton("🛠️ Support", url="https://t.me/iamvalrik")
     )
     kb.row(
-        InlineKeyboardButton(text="FAKE BUTTON", url="tg://setting"),
-        InlineKeyboardButton(text="📦 Your Info", callback_data="stats")
+        InlineKeyboardButton("📦 Your Info", callback_data="stats"),
+        InlineKeyboardButton("🆘 How to Use?", callback_data="howto")
     )
-    kb.row(InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto"))
     await m.answer(text, reply_markup=kb.as_markup())
 
 # ===== Balance =====
-@dp.callback_query(F.data == "balance")
+@dp.callback_query(F.data=="balance")
 async def show_balance(cq: CallbackQuery):
     user = users_col.find_one({"_id": cq.from_user.id})
-    bal = user["balance"] if user else 0.0
-    await cq.answer(f"💰 Your balance: {bal:.2f} ₹", show_alert=True)
+    await cq.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹", show_alert=True)
 
 @dp.message(Command("balance"))
 async def cmd_balance(msg: Message):
     user = users_col.find_one({"_id": msg.from_user.id})
-    bal = user["balance"] if user else 0.0
-    await msg.answer(f"💰 Your balance: {bal:.2f} ₹")
+    await msg.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹")
 
-# ===== Telegram Purchase Flow =====
-@dp.callback_query(F.data == "buy")
+# ===== Buy Flow =====
+@dp.callback_query(F.data=="buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
-    kb = InlineKeyboardBuilder()
     countries = list(countries_col.find({}))
     if not countries:
         return await cq.message.answer("❌ No countries available. Admin must add stock first.")
-    for country in countries:
-        kb.button(text=country["name"], callback_data=f"country:{country['name']}")
+
+    kb = InlineKeyboardBuilder()
+    for c in countries:
+        kb.button(c["name"], callback_data=f"country:{c['name']}")
     kb.adjust(2)
-    await cq.message.edit_text("🌍 Select a country:", reply_markup=kb.as_markup())
+    await cq.message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data.startswith("country:"))
 async def callback_country(cq: CallbackQuery):
@@ -99,7 +101,7 @@ async def callback_country(cq: CallbackQuery):
     _, country_name = cq.data.split(":")
     country = countries_col.find_one({"name": country_name})
     if not country:
-        return await cq.answer("❌ Country not found.", show_alert=True)
+        return await cq.answer("❌ Country not found", show_alert=True)
 
     text = (
         f"⚡ Telegram Account Info\n\n"
@@ -107,62 +109,102 @@ async def callback_country(cq: CallbackQuery):
         f"💸 Price : ₹{country['price']}\n"
         f"📦 Available : {country['stock']}\n"
         f"🔍 Reliable | Affordable | Good Quality\n\n"
-        f"⚠️ Important: Please use Telegram X only to login.\n"
-        f"🚫 We are not responsible for freeze/ban if logged in with other apps."
+        f"⚠️ Use Telegram X only to login.\n"
+        f"🚫 We are not responsible for freeze/ban."
     )
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="💳 Buy Now", callback_data=f"buy_now:{country_name}"),
-        InlineKeyboardButton(text="🔙 Back", callback_data="buy")
+        InlineKeyboardButton("💳 Buy Now", callback_data=f"buy_now:{country_name}"),
+        InlineKeyboardButton("🔙 Back", callback_data="buy")
     )
-    await cq.message.edit_text(text, reply_markup=kb.as_markup())
+    await cq.message.answer(text, reply_markup=kb.as_markup())  # Send NEW message instead of edit
 
 @dp.callback_query(F.data.startswith("buy_now:"))
 async def callback_buy_now(cq: CallbackQuery):
     await cq.answer()
     _, country_name = cq.data.split(":")
     country = countries_col.find_one({"name": country_name})
-    if not country:
-        return await cq.answer("❌ Country not found", show_alert=True)
+    if not country or country["stock"] <= 0:
+        return await cq.answer("❌ Out of stock or country not found", show_alert=True)
 
     user = get_or_create_user(cq.from_user.id, cq.from_user.username)
-
     if user["balance"] < country["price"]:
-        return await cq.answer("⚠️ Insufficient balance.", show_alert=True)
-    if country["stock"] <= 0:
-        return await cq.answer("❌ Out of stock.", show_alert=True)
+        return await cq.answer("⚠️ Insufficient balance", show_alert=True)
 
+    # Pick a random available number from numbers_col
+    number_doc = numbers_col.find_one({"country": country_name, "used": False})
+    if not number_doc:
+        return await cq.answer("❌ No available numbers for this country.", show_alert=True)
+
+    # Deduct balance and mark number as used
     users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -country["price"]}})
-    countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
+    numbers_col.update_one({"_id": number_doc["_id"]}, {"$set": {"used": True}})
 
-    order_doc = {
+    # Insert order
+    orders_col.insert_one({
         "user_id": user["_id"],
         "country": country_name,
+        "number": number_doc["number"],
         "price": country["price"],
-        "status": "completed",
+        "status": "purchased",
         "created_at": datetime.datetime.utcnow()
-    }
-    orders_col.insert_one(order_doc)
+    })
 
-    await cq.answer("✅ Purchase successful!", show_alert=True)
-    await cq.message.edit_text(
-        f"✅ Telegram account purchased!\n\n"
+    text = (
+        f"✅ Purchase Successful!\n\n"
         f"🌍 Country: {country_name}\n"
-        f"💰 Price: ₹{country['price']}"
+        f"📱 Number: {number_doc['number']}\n"
+        f"💸 Deducted: {country['price']}\n"
+        f"💰 Balance Left: {user['balance'] - country['price']:.2f}\n\n"
+        "👉 Copy the number and open Telegram X, paste the number, request login."
     )
 
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton("📋 Copy Number", callback_data=f"copy_number:{number_doc['number']}"),
+        InlineKeyboardButton("🔑 Get OTP", callback_data=f"get_otp:{number_doc['_id']}")
+    )
+    await cq.message.answer(text, reply_markup=kb.as_markup())
+
+# ===== Get OTP =====
+@dp.callback_query(F.data.startswith("get_otp:"))
+async def callback_get_otp(cq: CallbackQuery):
+    await cq.answer()
+    _, number_id = cq.data.split(":")
+    number_doc = numbers_col.find_one({"_id": number_id})
+    if not number_doc:
+        return await cq.answer("❌ Number not found", show_alert=True)
+
+    otp = await fetch_otp_for_number(number_doc)  # Calls separate module
+    if not otp:
+        return await cq.answer("❌ Failed to fetch OTP. Try again.", show_alert=True)
+
+    text = (
+        f"🚚 OTP Delivered Successfully!\n\n"
+        f"📱 {number_doc['number']}\n"
+        f"🔑 OTP: {otp}\n"
+        f"PASS: {number_doc['password']}\n\n"
+        "⚠️ This message will be deleted after 3 minutes.\n"
+        "👉 Enter this OTP in Telegram X. Max 2 attempts."
+    )
+    await cq.message.answer(text)
+    # Optionally delete the number from DB or mark used
+    numbers_col.delete_one({"_id": number_doc["_id"]})
+    await asyncio.sleep(180)
+    await cq.message.delete()
+
 # ===== Admin: Add Stock =====
-@dp.message(Command("add_stock"))
+@dp.message(Command("addstock"))
 async def cmd_add_stock(msg: Message):
     if not is_admin(msg.from_user.id):
-        return await msg.answer("❌ You are not authorized to use this command.")
+        return await msg.answer("❌ Not authorized")
     try:
         _, country_name, price, stock = msg.text.split()
         price = float(price)
         stock = int(stock)
     except Exception:
-        return await msg.answer("Usage: /add_stock <Country> <Price> <Stock>")
+        return await msg.answer("Usage: /addstock <Country> <Price> <Stock>")
 
     countries_col.update_one(
         {"name": country_name},
@@ -171,14 +213,46 @@ async def cmd_add_stock(msg: Message):
     )
     await msg.answer(f"✅ {stock} accounts added for {country_name} at ₹{price} each.")
 
+# ===== Admin: View/Delete Stock =====
+@dp.message(Command("viewstock"))
+async def cmd_view_stock(msg: Message):
+    if not is_admin(msg.from_user.id):
+        return await msg.answer("❌ Not authorized")
+    kb = InlineKeyboardBuilder()
+    for c in countries_col.find({}):
+        kb.button(c["name"], callback_data=f"viewstock_country:{c['name']}")
+    kb.adjust(2)
+    await msg.answer("Select country to view stock:", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data.startswith("viewstock_country:"))
+async def callback_view_stock_country(cq: CallbackQuery):
+    await cq.answer()
+    _, country_name = cq.data.split(":")
+    numbers = list(numbers_col.find({"country": country_name, "used": False}))
+    if not numbers:
+        return await cq.message.answer("❌ No stock for this country.")
+
+    msg_text = f"📦 Available numbers for {country_name}:\n"
+    for n in numbers:
+        msg_text += f"{n['number']} | PASS: {n['password']} | Used: {n.get('used', False)}\n"
+    await cq.message.answer(msg_text)
+
+@dp.message(Command("deletestock"))
+async def cmd_delete_stock(msg: Message):
+    if not is_admin(msg.from_user.id):
+        return await msg.answer("❌ Not authorized")
+    try:
+        _, country_name = msg.text.split()
+    except Exception:
+        return await msg.answer("Usage: /deletestock <Country>")
+    numbers_col.delete_many({"country": country_name, "used": False})
+    await msg.answer(f"✅ All unused stock deleted for {country_name}.")
+
 # ===== Other Callbacks =====
-@dp.callback_query(F.data == "howto")
+@dp.callback_query(F.data=="howto")
 async def callback_howto(cq: CallbackQuery):
     if not await check_join(bot, cq.message): return
-    await cq.message.answer(
-        "<b>📖 How to use QuickCodes Bot</b>\n1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Click Purchase and 📩 Receive OTP\n\n"
-        "✅ Done!\n🚀 Enjoy Fast OTP Services!\nNeed help? DM @Hehe_stalker"
-    )
+    await cq.message.answer("📖 How to use: Recharge → Select Country → Buy → Get OTP")
     await cq.answer()
 
 # ===== Stats =====
@@ -186,36 +260,24 @@ async def callback_howto(cq: CallbackQuery):
 async def cmd_stats(msg: Message):
     if not await check_join(bot, msg): return
     user = users_col.find_one({"_id": msg.from_user.id})
-    if not user: return await msg.answer("❌ No data found for your account.")
-    text = (
-        f"📊 <b>Your Statistics</b>\n\n👤 Name: {msg.from_user.full_name}\n"
-        f"🔹 Username: @{msg.from_user.username or '—'}\n🆔 User ID: <code>{msg.from_user.id}</code>\n"
-        f"💰 Balance: ₹{user.get('balance', 0):.2f}\n"
-    )
-    await msg.answer(text, parse_mode="HTML")
+    if not user: return await msg.answer("❌ No data found")
+    await msg.answer(f"📊 Balance: ₹{user.get('balance', 0):.2f}")
 
-@dp.callback_query(F.data == "stats")
+@dp.callback_query(F.data=="stats")
 async def callback_stats(cq: CallbackQuery):
     user = users_col.find_one({"_id": cq.from_user.id})
-    if not user: return await cq.answer("❌ No data found for your account.", show_alert=True)
-    text = (
-        f"📊 <b>Your Statistics</b>\n\n👤 Name: {cq.from_user.full_name}\n"
-        f"🔹 Username: @{cq.from_user.username or '—'}\n🆔 User ID: <code>{cq.from_user.id}</code>\n"
-        f"💰 Balance: ₹{user.get('balance', 0):.2f}\n"
-    )
-    await cq.message.answer(text, parse_mode="HTML")
+    if not user: return await cq.answer("❌ No data found", show_alert=True)
+    await cq.message.answer(f"📊 Balance: ₹{user.get('balance', 0):.2f}")
     await cq.answer()
 
 # ===== Support =====
 @dp.message(Command("support"))
 async def cmd_support(msg: Message):
     if not await check_join(bot, msg): return
-    text = f"👋 Hey {msg.from_user.full_name},\n\nIf you have any queries, feel free to contact our support."
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💬 Contact Support", url="https://t.me/hehe_stalker")],
-        [InlineKeyboardButton(text="📖 Terms of Use", url="https://telegra.ph/Terms-of-Use--Quick-Codes-Bot-08-31")]
+        [InlineKeyboardButton("💬 Contact Support", url="https://t.me/hehe_stalker")]
     ])
-    await msg.answer(text, reply_markup=kb)
+    await msg.answer(f"👋 {msg.from_user.full_name}, contact support if needed.", reply_markup=kb)
 
 # ===== Register external handlers =====
 register_readymade_accounts_handlers(dp=dp, bot=bot, users_col=users_col)

@@ -63,10 +63,14 @@ async def poll_for_otp(order_id: ObjectId, provider_order_id: str, chat_id: int)
         if status == "sms_received":
             otp_text = resp.get("sms")
             if otp_text:
-                orders_col.update_one({"_id": order_id}, {"$set": {"status": "received", "otp_text": otp_text}})
+                orders_col.update_one(
+                    {"_id": order_id},
+                    {"$set": {"status": "received", "otp_text": otp_text}}
+                )
                 await bot.send_message(
                     chat_id,
-                    f"✅ OTP Received:\n<code>{otp_text}</code>\n\n<blockquote>✅ Order Completed - Any Queries, Visit @QuickCodesGC</blockquote>"
+                    f"✅ OTP Received:\n<code>{otp_text}</code>\n\n"
+                    f"<blockquote>✅ Order Completed - Any Queries, Visit @QuickCodesGC</blockquote>"
                 )
             return
 
@@ -99,7 +103,9 @@ async def cancel_number_on_provider(activation_id: str) -> bool:
 async def cmd_start(m: Message):
     if not await check_join(bot, m):
         return
+
     get_or_create_user(m.from_user.id, m.from_user.username)
+
     await m.answer("🧑‍💻")
     text = (
         "<b>Welcome to Bot – ⚡ Most Trusted and Fastest OTP Bot!</b>\n"
@@ -137,18 +143,18 @@ async def cmd_balance(msg: Message):
     await msg.answer(f"💰 Your balance: {bal:.2f} ₹")
 
 # ===== Purchase Flow =====
-COUNTRIES = [
-    "India","Uzbekistan","Uzbekistan-Spam-Acc","USA","Indian-Old-2024","Indian-Old-2023",
-    "Colombia","Colombia-Old","Vietnam","Vietnam-Old","Kenya-Old","Morocco","Morocco-Old",
-    "Ghana-Old","Philippines-Old","Nigeria-Old","Argentina","Argentina-Old"
-]
-
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
     kb = InlineKeyboardBuilder()
-    for country in COUNTRIES:
-        kb.button(text=f"🌍 {country}", callback_data=f"buy_country:{country}")
+    countries = [
+        "India", "Uzbekistan", "Uzbekistan-Spam-Acc", "USA",
+        "Indian-Old-2024", "Indian-Old-2023", "Colombia", "Colombia-Old",
+        "Vietnam", "Vietnam-Old", "Kenya-Old", "Morocco", "Morocco-Old",
+        "Ghana-Old", "Philippines-Old", "Nigeria-Old", "Argentina", "Argentina-Old"
+    ]
+    for country in countries:
+        kb.button(text=country, callback_data=f"buy_country:{country}")
     kb.adjust(2)
     await cq.message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
 
@@ -156,38 +162,45 @@ async def callback_buy(cq: CallbackQuery):
 async def on_choose_country(cq: CallbackQuery):
     await cq.answer()
     _, country = cq.data.split(":")
-    # Show account info directly
-    price = provider.get_price(country, "Telegram")
-    stock = provider.get_stock(country, "Telegram")
-    text = (
-        f"⚡ Telegram Account Info\n\n"
-        f"🌍 Country : {country}\n"
-        f"💸 Price : {price} ₹\n"
-        f"📦 Available : {stock}\n"
-        f"🔍 Reliable | Affordable | Good Quality\n\n"
-        f"⚠️ Important: Please use Telegram X only to login.\n"
-        f"🚫 We are not responsible for freeze/ban if logged in with other apps."
-    )
     kb = InlineKeyboardBuilder()
-    kb.button(text="🔙 Go Back", callback_data="buy")
-    kb.button(text="💳 Buy Now", callback_data=f"buy_now:{country}:Telegram:{price}")
-    kb.adjust(2)
-    await cq.message.edit_text(text, reply_markup=kb.as_markup())
+    # Only listing Telegram service as example
+    kb.button(text="Telegram", callback_data=f"buy_service:{country}:Telegram")
+    kb.adjust(1)
+    kb.button(text="🔙 Back", callback_data="buy")
+    await cq.message.edit_text("💬 Select a service:", reply_markup=kb.as_markup())
 
-@dp.callback_query(F.data.startswith("buy_now:"))
-async def on_buy_now(cq: CallbackQuery):
+@dp.callback_query(F.data.startswith("buy_service:"))
+async def on_buy_service(cq: CallbackQuery):
     await cq.answer()
-    _, country, service, price = cq.data.split(":")
+    _, country, service = cq.data.split(":")
+    kb = InlineKeyboardBuilder()
+    operator_links = provider.get_operator_list(country, service)
+    for op_id in operator_links.keys():
+        price = provider.get_operator_price(country, service, op_id)
+        kb.button(
+            text=f"{op_id.upper()}-{DEFAULT_CURRENCY}{price} {country}-{service}",
+            callback_data=f"confirm:{country}:{service}:{op_id}:{price}"
+        )
+    kb.adjust(1)
+    kb.button(text="🔙 Back", callback_data=f"buy_country:{country}")
+    await cq.message.edit_text("🏢 Select an operator:", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data.startswith("confirm:"))
+async def on_confirm(cq: CallbackQuery):
+    await cq.answer()
+    _, country, service, op_id, price = cq.data.split(":")
     price = float(price)
+
     user = get_or_create_user(cq.from_user.id, cq.from_user.username)
 
     if user["balance"] < price or user["balance"] < MIN_BALANCE_REQUIRED:
         await cq.answer("⚠️ Insufficient balance.", show_alert=True)
-        return await cq.message.answer("⚠️ You don’t have enough balance to complete this purchase.")
+        await cq.message.answer("⚠️ You don’t have enough balance to complete this purchase.")
+        return
 
     await cq.message.answer("⏳ Purchasing number...")
     try:
-        url = provider.get_operator_url(country, service, "default")
+        url = provider.get_operator_url(country, service, op_id)
         resp = await provider.buy_number(url)
         if resp.get("status") != "success":
             return await cq.message.answer(f"❌ Purchase failed: {resp}")
@@ -202,7 +215,7 @@ async def on_buy_now(cq: CallbackQuery):
             "country": country,
             "price": price,
             "provider_order_id": provider_order_id,
-        "number": number,
+            "number": number,
             "status": "waiting_sms",
             "created_at": datetime.datetime.utcnow()
         }
@@ -216,7 +229,6 @@ async def on_buy_now(cq: CallbackQuery):
             f"wait 2 minutes and cancel the number, then try again 👍</i></blockquote>\n",
             reply_markup=kb.as_markup()
         )
-
         asyncio.create_task(poll_for_otp(order_id, provider_order_id, cq.message.chat.id))
 
     except ProviderError as e:
@@ -224,7 +236,7 @@ async def on_buy_now(cq: CallbackQuery):
     except Exception as e:
         await cq.message.answer(f"⚠️ Unexpected error: {e}")
 
-# ===== Cancel Callback =====
+# ===== Cancel =====
 @dp.callback_query(F.data.startswith("cancel:"))
 async def on_cancel(cq: CallbackQuery):
     order_id = ObjectId(cq.data.split(":")[1])
@@ -263,7 +275,7 @@ async def on_cancel(cq: CallbackQuery):
     else:
         await cq.answer("❌ Order already cancelled.", show_alert=True)
 
-# ===== HowTo =====
+# ===== Other Callbacks =====
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
     if not await check_join(bot, cq.message): return

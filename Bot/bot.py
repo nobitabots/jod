@@ -69,16 +69,16 @@ async def cmd_start(m: Message):
     )
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton("💵 Balance", callback_data="balance"),
-        InlineKeyboardButton("🛒 Buy Account", callback_data="buy")
+        InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
+        InlineKeyboardButton(text="🛒 Buy Account", callback_data="buy")
     )
     kb.row(
-        InlineKeyboardButton("💳 Recharge", callback_data="recharge"),
+        InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
         InlineKeyboardButton("🛠️ Support", url="https://t.me/iamvalrik")
     )
     kb.row(
-        InlineKeyboardButton("📦 Your Info", callback_data="stats"),
-        InlineKeyboardButton("🆘 How to Use?", callback_data="howto")
+        InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
+        InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto")
     )
     menu_msg = await m.answer("Loading menu...", reply_markup=None)
     await menu_msg.edit_text(text, reply_markup=kb.as_markup())
@@ -104,7 +104,7 @@ async def send_country_menu(message, previous=""):
         kb.button(text=html.escape(c["name"]), callback_data=f"country:{c['name']}")
     kb.adjust(2)
     if previous:
-        kb.row(InlineKeyboardButton("🔙 Back", callback_data=previous))
+        kb.row(InlineKeyboardButton(text="🔙 Back", callback_data=previous))
     await message.edit_text("🌍 Select a country:", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data=="buy")
@@ -130,8 +130,8 @@ async def callback_country(cq: CallbackQuery):
     )
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton("💳 Buy Now", callback_data=f"buy_now:{country_name}"),
-        InlineKeyboardButton("🔙 Back", callback_data="buy")
+        InlineKeyboardButton(text="💳 Buy Now", callback_data=f"buy_now:{country_name}"),
+        InlineKeyboardButton(text="🔙 Back", callback_data="buy")
     )
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 

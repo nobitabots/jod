@@ -12,7 +12,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pymongo import MongoClient
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError
 import re
 
 from recharge_flow import register_recharge_handlers
@@ -34,11 +33,6 @@ bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
 dp = Dispatcher()
 
 # ================= FSM =================
-class AddNumberStates(StatesGroup):
-    waiting_country = State()
-    waiting_number = State()
-    waiting_password = State()
-
 class AddSession(StatesGroup):
     waiting_country = State()
     waiting_number = State()
@@ -56,26 +50,44 @@ def get_or_create_user(user_id: int, username: str | None):
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# ================= OTP Fetcher =================
-async def otp_searcher(strses: str) -> str:
-    """
-    Fetches the latest 5-digit OTP from Telegram's 777000 bot using the string session.
-    """
+# ================= Automatic OTP Listener =================
+async def otp_listener(number_doc, user_id):
+    string_session = number_doc.get("string_session")
+    if not string_session:
+        return
+
     api_id = int(os.getenv("API_ID"))
     api_hash = os.getenv("API_HASH")
-    async with TelegramClient(StringSession(strses), api_id, api_hash) as client:
-        code = ""
-        try:
-            async for message in client.iter_messages(777000, limit=5, search="Login code"):
-                if message.message:
-                    pattern = r"\b\d{5}\b"
-                    match = re.search(pattern, message.message)
+
+    client = TelegramClient(StringSession(string_session), api_id, api_hash)
+    await client.connect()
+    if not await client.is_user_authorized():
+        await client.disconnect()
+        return
+
+    pattern = re.compile(r"\b\d{4,6}\b")
+    try:
+        while True:
+            async for msg in client.iter_messages(777000, limit=5):
+                if msg.message:
+                    match = pattern.search(msg.message)
                     if match:
                         code = match.group(0)
-                        break
-        except Exception as e:
-            print(f"OTP fetch error: {e}")
-        return code if code else 'NOT FOUND TRY SENDING CODE AGAIN'
+                        await bot.send_message(
+                            user_id,
+                            f"✅ OTP for {number_doc['number']}:\n<code>{code}</code>",
+                            parse_mode="HTML"
+                        )
+                        numbers_col.update_one(
+                            {"_id": number_doc["_id"]},
+                            {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}}
+                        )
+                        await client.disconnect()
+                        return
+            await asyncio.sleep(3)
+    except Exception as e:
+        await client.disconnect()
+        await bot.send_message(user_id, f"❌ OTP listener error:\n<code>{html.escape(str(e))}</code>", parse_mode="HTML")
 
 # ================= START =================
 @dp.message(Command("start"))
@@ -227,37 +239,17 @@ async def handle_quantity(msg: Message, state: FSMContext):
             print("DB update error:", e)
     await asyncio.to_thread(update_db)
 
-    # Send numbers to user with OTP button
+    # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
-        kb = InlineKeyboardBuilder()
-        kb.row(InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{num['_id']}"))
         await msg.answer(
-            f"✅ Purchased {country_name} account!\n📱 Number: {num['number']}\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}",
-            reply_markup=kb.as_markup()
+            f"✅ Purchased {country_name} account!\n📱 Number: {num['number']}\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}"
         )
+        # start OTP listener in background
+        asyncio.create_task(otp_listener(num, msg.from_user.id))
+
     await state.clear()
 
-# ================= Grab OTP =================
-@dp.callback_query(F.data.startswith("grab_otp:"))
-async def callback_grab_otp(cq: CallbackQuery):
-    await cq.answer("⏳ Fetching OTP...", show_alert=True)
-    _, number_id = cq.data.split(":", 1)
-
-    number_doc = await asyncio.to_thread(lambda: numbers_col.find_one({"_id": number_id}))
-    if not number_doc or not number_doc.get("string_session"):
-        return await cq.answer("❌ Number or session not found.", show_alert=True)
-
-    code = await otp_searcher(number_doc["string_session"])
-    await cq.message.answer(f"✅ OTP for {number_doc['number']}:\n<code>{code}</code>", parse_mode="HTML")
-
-
-# ===== Admin Add Number Flow =====
-class AddSession(StatesGroup):
-    waiting_country = State()
-    waiting_number = State()
-    waiting_otp = State()
-    waiting_password = State()
-
+# ================= Admin Add Number Flow =================
 @dp.message(Command("add"))
 async def cmd_add_start(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
@@ -328,7 +320,8 @@ async def add_number_verify_code(msg: Message, state: FSMContext):
             "used": False
         })
         countries_col.update_one({"name": country}, {"$inc": {"stock": 1}}, upsert=True)
-        await msg.answer(f"✅ Added number {phone} for {country} successfully!")
+        # Send confirmation with string session for verification
+        await msg.answer(f"✅ Added number {phone} for {country} successfully!\n🔑 String Session:\n<code>{string_session}</code>", parse_mode="HTML")
         await state.clear()
 
     except Exception as e:
@@ -364,7 +357,12 @@ async def add_number_with_password(msg: Message, state: FSMContext):
             "used": False
         })
         countries_col.update_one({"name": country}, {"$inc": {"stock": 1}}, upsert=True)
-        await msg.answer(f"✅ Added number {phone} (with 2FA) for {country}.")
+        # Send confirmation with string session for verification
+        await msg.answer(
+            f"✅ Added number {phone} (with 2FA) for {country} successfully!\n"
+            f"🔑 String Session:\n<code>{string_session}</code>",
+            parse_mode="HTML"
+        )
         await state.clear()
     except Exception as e:
         await client.disconnect()

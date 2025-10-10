@@ -115,10 +115,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         kb.button(text="Go Back", callback_data="go_back")
         kb.adjust(2)
 
-        text = (
-            "Select the UPI method below to deposit your funds.\n\n"
-            "1 INR = 1 INR"
-        )
+        text = "Select the UPI method below to deposit your funds.\n\n1 INR = 1 INR"
 
         await bot.edit_message_text(
             text=text,
@@ -166,7 +163,6 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             await cq.message.delete()
         except:
             pass
-
         await cq.message.answer("📸 Please send a screenshot of your payment.")
         await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
@@ -175,7 +171,6 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
     async def screenshot_received(message: Message, state: FSMContext):
         await state.update_data(screenshot=message.photo[-1].file_id)
 
-        # Send amount input message with calculator
         kb = InlineKeyboardBuilder()
         for row in ["123", "456", "789", "0"]:
             for ch in row:
@@ -198,7 +193,6 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
         if cq.data.startswith("amount_"):
             key = cq.data.split("_")[1]
-
             if key == "del":
                 value = value[:-1]
             elif key == "send":
@@ -227,6 +221,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
                 )
                 await state.clear()
 
+                # Admin buttons
                 kb_admin = InlineKeyboardBuilder()
                 kb_admin.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
                 kb_admin.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
@@ -264,13 +259,41 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
     @dp.callback_query(F.data.startswith("approve_txn"))
     async def approve_txn(cq: CallbackQuery):
         txn_id = cq.data.split(":")[1]
+        txn = txns_col.find_one({"_id": ObjectId(txn_id)})
+
+        if not txn:
+            await cq.answer("Transaction not found!", show_alert=True)
+            return
+
+        if txn.get("status") == "approved":
+            await cq.answer("Already approved!", show_alert=True)
+            return
+
+        # Update transaction status
         txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
+
+        # Add balance to user
+        users_col.update_one(
+            {"user_id": txn["user_id"]},
+            {"$inc": {"balance": txn["amount"]}}
+        )
+
         await cq.message.edit_caption(cq.message.caption + "\n✅ Approved")
-        await cq.answer("Transaction approved!")
+        await cq.answer("Transaction approved and balance updated!")
 
     @dp.callback_query(F.data.startswith("decline_txn"))
     async def decline_txn(cq: CallbackQuery):
         txn_id = cq.data.split(":")[1]
+        txn = txns_col.find_one({"_id": ObjectId(txn_id)})
+
+        if not txn:
+            await cq.answer("Transaction not found!", show_alert=True)
+            return
+
+        if txn.get("status") == "declined":
+            await cq.answer("Already declined!", show_alert=True)
+            return
+
         txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
         await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
         await cq.answer("Transaction declined!")

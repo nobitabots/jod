@@ -13,7 +13,6 @@ from pymongo import MongoClient
 from bson import ObjectId
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from telethon.errors import SessionPasswordNeededError
 
 from recharge_flow import register_recharge_handlers
 from readymade_accounts import register_readymade_accounts_handlers
@@ -43,7 +42,7 @@ class AddNumberStates(StatesGroup):
 class AdminAdjustBalanceState(StatesGroup):
     waiting_input = State()
 
-# ===== Helper Functions =====
+# ===== Helpers =====
 def get_or_create_user(user_id: int, username: str | None):
     user = users_col.find_one({"_id": user_id})
     if not user:
@@ -54,13 +53,12 @@ def get_or_create_user(user_id: int, username: str | None):
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# ===== START COMMAND =====
+# ===== START =====
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
     if not await check_join(bot, m):
         return
     get_or_create_user(m.from_user.id, m.from_user.username)
-
     text = (
         "<b>Welcome to Bot – ⚡ Fastest Telegram OTP Bot!</b>\n"
         "<i>📖 How to use Bot:</i>\n"
@@ -83,13 +81,13 @@ async def cmd_start(m: Message):
     menu_msg = await m.answer("Loading menu...", reply_markup=None)
     await menu_msg.edit_text(text, reply_markup=kb.as_markup())
 
-# ===== BALANCE CALLBACK =====
+# ===== BALANCE =====
 @dp.callback_query(F.data=="balance")
 async def show_balance(cq: CallbackQuery):
     user = users_col.find_one({"_id": cq.from_user.id})
     await cq.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹", show_alert=True)
 
-# ===== COUNTRY SELECTION =====
+# ===== BUY FLOW =====
 async def send_country_menu(message, previous=""):
     countries = list(countries_col.find({}))
     if not countries:
@@ -114,7 +112,6 @@ async def callback_country(cq: CallbackQuery):
     country = countries_col.find_one({"name": country_name})
     if not country:
         return await cq.answer("❌ Country not found", show_alert=True)
-    
     text = (
         f"⚡ Telegram Account Info\n\n"
         f"🌍 Country : {html.escape(country['name'])}\n"
@@ -131,30 +128,25 @@ async def callback_country(cq: CallbackQuery):
     )
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
-# ===== BUY & DEDUCT BALANCE =====
+# ===== BUY NOW =====
 @dp.callback_query(F.data.startswith("buy_now:"))
 async def callback_buy_now(cq: CallbackQuery):
     await cq.answer()
     _, country_name = cq.data.split(":", 1)
-    
     country = countries_col.find_one({"name": country_name})
     if not country:
         return await cq.answer("❌ Country not found", show_alert=True)
-    
     user = get_or_create_user(cq.from_user.id, cq.from_user.username)
-    price = country.get("price", 0)
-    stock = country.get("stock", 0)
-    balance = user.get("balance", 0)
-    
+    price, stock, balance = country.get("price", 0), country.get("stock", 0), user.get("balance",0)
     if stock <= 0:
         return await cq.answer("❌ Stock not available", show_alert=True)
     if balance < price:
         return await cq.answer("⚠️ Insufficient balance", show_alert=True)
-    
     number_doc = numbers_col.find_one({"country": country_name, "used": False})
     if not number_doc:
         return await cq.answer("❌ No available numbers", show_alert=True)
-    
+
+    # Deduct balance, mark number used, decrease stock, insert order
     users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -price}})
     numbers_col.update_one({"_id": number_doc["_id"]}, {"$set": {"used": True}})
     countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
@@ -169,12 +161,31 @@ async def callback_buy_now(cq: CallbackQuery):
 
     kb = InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}"))
+
     await cq.message.edit_text(
-        f"✅ Purchase Successful!\n🌍 {country_name}\n📱 {number_doc['number']}\n💸 {price}\n💰 Balance Left: {balance - price:.2f}\n\n👉 Click below to get OTP.",
+        f"✅ Purchase Successful!\n"
+        f"🌍 {country_name}\n"
+        f"📱 {number_doc['number']}\n"
+        f"💸 {price}\n"
+        f"💰 Balance Left: {balance - price:.2f}\n\n"
+        f"👉 Click below to get OTP.",
         reply_markup=kb.as_markup()
     )
 
-# ===== GRAB OTP =====
+    # ===== Notify admin/channel =====
+    try:
+        await bot.send_message(
+            "@thedrxnet",
+            f"📦 Purchase Complete!\n"
+            f"👤 User: {cq.from_user.full_name} (@{cq.from_user.username})\n"
+            f"🌍 Country: {number_doc['country']}\n"
+            f"📱 Number: {number_doc['number']}\n"
+            f"💸 Price: ₹{price}"
+        )
+    except Exception as e:
+        print(f"⚠️ Failed to notify admin: {e}")
+
+# ===== OTP RETRIEVAL =====
 @dp.callback_query(F.data.startswith("grab_otp:"))
 async def callback_grab_otp(cq: CallbackQuery):
     await cq.answer()
@@ -182,43 +193,31 @@ async def callback_grab_otp(cq: CallbackQuery):
     number_doc = numbers_col.find_one({"_id": ObjectId(number_id)})
     if not number_doc:
         return await cq.answer("❌ Number not found", show_alert=True)
-
     string_session = number_doc.get("string_session")
     if not string_session:
         return await cq.answer("❌ String session missing", show_alert=True)
 
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
+    api_id, api_hash = int(os.getenv("API_ID")), os.getenv("API_HASH")
     client = TelegramClient(StringSession(string_session), api_id, api_hash)
-
     await client.connect()
     try:
         otp_code = None
-        async for msg in client.iter_messages("777000", limit=10):
+        async for msg in client.iter_messages("777000", limit=20):
             if msg.message and msg.message.isdigit():
                 otp_code = msg.message
                 break
         if not otp_code:
             return await cq.answer("⚠️ No OTP yet. Try again later.", show_alert=True)
-
         await cq.message.edit_text(
             f"✅ OTP Received!\n📱 {number_doc['number']}\n🔑 OTP: <code>{otp_code}</code>",
             parse_mode="HTML"
         )
-
-        await bot.send_message(
-            "@thedrxnet",
-            f"📦 Purchase Notification\n"
-            f"👤 User: {user.get('username','Unknown')} ({user['_id']})\n"
-            f"🌍 Country: {country}\n"
-            f"📱 Number: {number}\n"
-            f"💸 Price: ₹{price}"
-        )
-        await msg.answer("✅ Last purchase notified to @thedrxnet")
     except Exception as e:
-        await msg.answer(f"❌ Failed to notify: {e}")
+        await cq.message.edit_text(f"❌ Failed to grab OTP: {e}")
+    finally:
+        await client.disconnect()
 
-    # ===== ADMIN ADD NUMBER (Telethon string session) =====
+# ===== ADMIN ADD NUMBER (Telethon string session) =====
 @dp.message(Command("add"))
 async def cmd_add_start(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
@@ -247,8 +246,7 @@ async def add_number_get_code(msg: Message, state: FSMContext):
     country = data["country"]
     phone = msg.text.strip()
     await state.update_data(number=phone)
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
+    api_id, api_hash = int(os.getenv("API_ID")), os.getenv("API_HASH")
     session = StringSession()
     client = TelegramClient(session, api_id, api_hash)
     await client.connect()
@@ -265,27 +263,25 @@ async def add_number_get_code(msg: Message, state: FSMContext):
 @dp.message(AddNumberStates.waiting_otp)
 async def add_number_verify_code(msg: Message, state: FSMContext):
     data = await state.get_data()
-    country = data["country"]
-    phone = data["number"]
-    session_str = data["session"]
+    country, phone, session_str = data["country"], data["number"], data["session"]
     phone_code_hash = data.get("phone_code_hash")
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
+    api_id, api_hash = int(os.getenv("API_ID")), os.getenv("API_HASH")
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.connect()
     try:
         await client.sign_in(phone=phone, code=msg.text.strip(), phone_code_hash=phone_code_hash)
         string_session = client.session.save()
-        await client.disconnect()
         numbers_col.insert_one({"country": country, "number": phone, "string_session": string_session, "used": False})
-        countries_col.update_one({"name": country}, {"$inc": {"stock":1}}, upsert=True)
+        countries_col.update_one({"name": country}, {"$inc": {"stock": 1}}, upsert=True)
         await msg.answer(f"✅ Added number {phone} for {country}")
         await state.clear()
+        await client.disconnect()
     except Exception as e:
         if "PASSWORD" in str(e).upper() or "two-step" in str(e).lower():
             await msg.answer("🔐 Two-step enabled. Send password:")
             await state.update_data(session=session_str)
             await state.set_state(AddNumberStates.waiting_password)
+            await client.disconnect()
         else:
             await client.disconnect()
             await msg.answer(f"❌ Error: {e}")
@@ -293,21 +289,18 @@ async def add_number_verify_code(msg: Message, state: FSMContext):
 @dp.message(AddNumberStates.waiting_password)
 async def add_number_with_password(msg: Message, state: FSMContext):
     data = await state.get_data()
-    country = data["country"]
-    phone = data["number"]
-    session_str = data["session"]
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
+    country, phone, session_str = data["country"], data["number"], data["session"]
+    api_id, api_hash = int(os.getenv("API_ID")), os.getenv("API_HASH")
     client = TelegramClient(StringSession(session_str), api_id, api_hash)
     await client.connect()
     try:
         await client.sign_in(password=msg.text.strip())
         string_session = client.session.save()
-        await client.disconnect()
         numbers_col.insert_one({"country": country, "number": phone, "string_session": string_session, "used": False})
-        countries_col.update_one({"name": country}, {"$inc":{"stock":1}}, upsert=True)
+        countries_col.update_one({"name": country}, {"$inc": {"stock": 1}}, upsert=True)
         await msg.answer(f"✅ Added number {phone} with 2FA for {country}")
         await state.clear()
+        await client.disconnect()
     except Exception as e:
         await client.disconnect()
         await msg.answer(f"❌ Error signing in with password: {e}")
@@ -323,10 +316,10 @@ async def cmd_add_country(msg: Message):
 async def handle_add_country(msg: Message):
     if not is_admin(msg.from_user.id) or "," not in msg.text:
         return
-    name, price = msg.text.split(",",1)
+    name, price = msg.text.split(",", 1)
     try: price = float(price.strip())
     except: return await msg.answer("❌ Invalid price")
-    countries_col.update_one({"name": name.strip()}, {"$set":{"price":price,"stock":0}}, upsert=True)
+    countries_col.update_one({"name": name.strip()}, {"$set": {"price": price, "stock": 0}}, upsert=True)
     await msg.answer(f"✅ Country {name.strip()} added/updated: ₹{price}")
 
 # ===== ADMIN CREDIT/DEBIT =====
@@ -349,15 +342,15 @@ async def handle_adjust_balance(msg: Message, state: FSMContext):
     data = await state.get_data()
     action = data.get("action")
     if "," not in msg.text: return await msg.answer("❌ Invalid format")
-    uid_str, amt_str = msg.text.split(",",1)
+    uid_str, amt_str = msg.text.split(",", 1)
     try:
         user_id = int(uid_str.strip())
         amount = float(amt_str.strip())
     except: return await msg.answer("❌ Invalid values")
     user = users_col.find_one({"_id": user_id})
     if not user: return await msg.answer("❌ User not found")
-    new_balance = user["balance"] + amount if action=="credit" else max(user["balance"]-amount,0)
-    users_col.update_one({"_id": user_id},{"$set":{"balance":new_balance}})
+    new_balance = user["balance"] + amount if action == "credit" else max(user["balance"] - amount, 0)
+    users_col.update_one({"_id": user_id}, {"$set": {"balance": new_balance}})
     await msg.answer(f"✅ {action.capitalize()}ed ₹{amount:.2f}. New balance: ₹{new_balance:.2f}")
     await state.clear()
 

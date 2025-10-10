@@ -149,39 +149,47 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
 
-    # ----- Screenshot -----
-    @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot), F.photo)
+# ----- Screenshot -----
+    @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot))
     async def screenshot_received(message: Message, state: FSMContext):
+        if not message.photo:
+            await message.answer("❌ Please send a valid screenshot image.")
+            return
+
         await state.update_data(screenshot=message.photo[-1].file_id)
         await message.answer("💰 Enter the amount you sent (numbers only):")
         await state.set_state(RechargeState.waiting_deposit_amount)
+        print("State changed → waiting_deposit_amount")  # Debug log
 
     # ----- Amount -----
-    @dp.message(StateFilter(RechargeState.waiting_deposit_amount), F.text)
+    @dp.message(StateFilter(RechargeState.waiting_deposit_amount))
     async def amount_received(message: Message, state: FSMContext):
         amount_text = message.text.strip()
+
+        # Ensure it's a valid number
         if not amount_text.isdigit():
-            await message.answer("❌ Please enter a valid number (digits only, e.g., 100).")
+            await message.answer("❌ Please enter a valid number (e.g., 100).")
             return
 
         amount = int(amount_text)
         await state.update_data(amount=amount)
         await message.answer("🆔 Now please send your Payment ID / UTR:")
         await state.set_state(RechargeState.waiting_payment_id)
+        print("State changed → waiting_payment_id")  # Debug log
 
     # ----- Payment ID / UTR -----
-    @dp.message(StateFilter(RechargeState.waiting_payment_id), F.text)
+    @dp.message(StateFilter(RechargeState.waiting_payment_id))
     async def payment_id_received(message: Message, state: FSMContext):
+        payment_id = message.text.strip()
         data = await state.get_data()
+
         screenshot = data.get("screenshot")
         amount = data.get("amount")
-        payment_id = message.text.strip()
-
         user_id = message.from_user.id
         username = message.from_user.username or "None"
         full_name = message.from_user.full_name
 
-        # Save in DB
+        # Store TXN
         txn_doc = {
             "user_id": user_id,
             "username": username,
@@ -194,7 +202,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         }
         txn_id = txns_col.insert_one(txn_doc).inserted_id
 
-        # Update user balance (temp)
+        # Update user balance temporarily
         user = users_col.find_one({"_id": user_id})
         if not user:
             users_col.insert_one({"_id": user_id, "balance": amount})
@@ -202,15 +210,15 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             users_col.update_one({"_id": user_id}, {"$inc": {"balance": amount}})
 
         await message.answer(
-            "✅ Recharge request received!\n\n"
-            f"💰 Amount: ₹{amount}\n"
-            f"🆔 Payment ID / UTR: {payment_id}\n\n"
-            "📸 Screenshot saved successfully.\n"
-            "⏳ Please wait while admin verifies your payment."
+            f"✅ ₹{amount} added temporarily to your balance!\n"
+            f"🆔 UTR: {payment_id}\n"
+            "⏳ Awaiting admin verification..."
         )
-        await state.clear()
 
-        # Send to admins
+        await state.clear()
+        print("Recharge flow complete and state cleared.")  # Debug log
+
+        # Notify Admins
         kb = InlineKeyboardBuilder()
         kb.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
         kb.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")

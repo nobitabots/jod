@@ -43,7 +43,7 @@ class AddNumberStates(StatesGroup):
 class AdminAdjustBalanceState(StatesGroup):
     waiting_input = State()
 
-# ===== Helpers =====
+# ===== Helper Functions =====
 def get_or_create_user(user_id: int, username: str | None):
     user = users_col.find_one({"_id": user_id})
     if not user:
@@ -54,7 +54,7 @@ def get_or_create_user(user_id: int, username: str | None):
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# ===== START =====
+# ===== START COMMAND =====
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
     if not await check_join(bot, m):
@@ -83,13 +83,13 @@ async def cmd_start(m: Message):
     menu_msg = await m.answer("Loading menu...", reply_markup=None)
     await menu_msg.edit_text(text, reply_markup=kb.as_markup())
 
-# ===== BALANCE =====
+# ===== BALANCE CALLBACK =====
 @dp.callback_query(F.data=="balance")
 async def show_balance(cq: CallbackQuery):
     user = users_col.find_one({"_id": cq.from_user.id})
     await cq.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹", show_alert=True)
 
-# ===== BUY FLOW =====
+# ===== COUNTRY SELECTION =====
 async def send_country_menu(message, previous=""):
     countries = list(countries_col.find({}))
     if not countries:
@@ -124,16 +124,14 @@ async def callback_country(cq: CallbackQuery):
         f"⚠️ Use Telegram X only to login.\n"
         f"🚫 Not responsible for freeze/ban."
     )
-    
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="💳 Buy Now", callback_data=f"buy_now:{country_name}"),
         InlineKeyboardButton(text="🔙 Back", callback_data="buy")
     )
-    
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
-# ===== BUY NOW & OTP FLOW =====
+# ===== BUY & DEDUCT BALANCE =====
 @dp.callback_query(F.data.startswith("buy_now:"))
 async def callback_buy_now(cq: CallbackQuery):
     await cq.answer()
@@ -157,7 +155,6 @@ async def callback_buy_now(cq: CallbackQuery):
     if not number_doc:
         return await cq.answer("❌ No available numbers", show_alert=True)
     
-    # Deduct balance and mark number used
     users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -price}})
     numbers_col.update_one({"_id": number_doc["_id"]}, {"$set": {"used": True}})
     countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
@@ -171,21 +168,13 @@ async def callback_buy_now(cq: CallbackQuery):
     })
 
     kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}")
-    )
-    
+    kb.row(InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}"))
     await cq.message.edit_text(
-        f"✅ Purchase Successful!\n"
-        f"🌍 {country_name}\n"
-        f"📱 {number_doc['number']}\n"
-        f"💸 {price}\n"
-        f"💰 Balance Left: {balance - price:.2f}\n\n"
-        f"👉 Click below to get OTP.",
+        f"✅ Purchase Successful!\n🌍 {country_name}\n📱 {number_doc['number']}\n💸 {price}\n💰 Balance Left: {balance - price:.2f}\n\n👉 Click below to get OTP.",
         reply_markup=kb.as_markup()
     )
 
-# ===== GRAB OTP USING STRING SESSION =====
+# ===== GRAB OTP =====
 @dp.callback_query(F.data.startswith("grab_otp:"))
 async def callback_grab_otp(cq: CallbackQuery):
     await cq.answer()
@@ -213,28 +202,23 @@ async def callback_grab_otp(cq: CallbackQuery):
             return await cq.answer("⚠️ No OTP yet. Try again later.", show_alert=True)
 
         await cq.message.edit_text(
-            f"✅ OTP Received!\n"
-            f"📱 {number_doc['number']}\n"
-            f"🔑 OTP: <code>{otp_code}</code>",
+            f"✅ OTP Received!\n📱 {number_doc['number']}\n🔑 OTP: <code>{otp_code}</code>",
             parse_mode="HTML"
         )
 
-        # Notify channel about completed purchase
         await bot.send_message(
             "@thedrxnet",
-            f"📦 Purchase Complete!\n"
-            f"👤 User: {cq.from_user.full_name} (@{cq.from_user.username})\n"
-            f"🌍 Country: {number_doc['country']}\n"
-            f"📱 Number: {number_doc['number']}\n"
-            f"💸 Price: ₹{number_doc.get('price', 'N/A')}"
+            f"📦 Purchase Notification\n"
+            f"👤 User: {user.get('username','Unknown')} ({user['_id']})\n"
+            f"🌍 Country: {country}\n"
+            f"📱 Number: {number}\n"
+            f"💸 Price: ₹{price}"
         )
-
+        await msg.answer("✅ Last purchase notified to @thedrxnet")
     except Exception as e:
-        await cq.message.edit_text(f"❌ Failed to grab OTP: {e}")
-    finally:
-        await client.disconnect()
+        await msg.answer(f"❌ Failed to notify: {e}")
 
-# ===== ADMIN ADD NUMBER (Telethon string session) =====
+    # ===== ADMIN ADD NUMBER (Telethon string session) =====
 @dp.message(Command("add"))
 async def cmd_add_start(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):

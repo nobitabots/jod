@@ -164,24 +164,32 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
 
-    # ===== Screenshot Received =====
+# ===== Screenshot Received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot))
     async def screenshot_received(message: Message, state: FSMContext):
         if not message.photo:
-            await message.answer("❌ Please send a valid screenshot image.")
+            await message.answer("❌ Please send a valid payment screenshot.")
             return
+
         await state.update_data(screenshot=message.photo[-1].file_id)
         await message.answer("💰 Enter the amount you sent (in ₹):")
+        # Important: set state **after** sending message
         await state.set_state(RechargeState.waiting_deposit_amount)
 
     # ===== Amount Received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_amount))
     async def amount_received(message: Message, state: FSMContext):
-        amt = message.text.strip()
-        if not amt.replace(".", "", 1).isdigit():
-            await message.answer("❌ Invalid amount. Enter numbers only.")
+        amt_text = message.text.strip()
+
+        # Debug print to confirm bot is reading messages
+        print(f"[DEBUG] Received amount message: {amt_text}")
+
+        if not amt_text.replace(".", "", 1).isdigit():
+            await message.answer("❌ Invalid amount. Please enter numbers only.")
             return
-        await state.update_data(amount=float(amt))
+
+        amt = float(amt_text)
+        await state.update_data(amount=amt)
         await message.answer("🔑 Please send your Payment ID / UTR:")
         await state.set_state(RechargeState.waiting_payment_id)
 
@@ -212,8 +220,8 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.clear()
 
         kb = InlineKeyboardBuilder()
-        kb.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
-        kb.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
+        kb.button(text="✅ Approve", callback_data=f"approve_txn:{str(txn_id)}")
+        kb.button(text="❌ Decline", callback_data=f"decline_txn:{str(txn_id)}")
         kb.adjust(2)
 
         for admin_id in ADMIN_IDS:

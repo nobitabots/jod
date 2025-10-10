@@ -21,7 +21,7 @@ from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS
 
 # ================= MongoDB Setup =================
-MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Sony:Sony123@sony0.soh6m14.mongodb.net/?retryWrites=true&w=majority&appName=Sony0"
+MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Venesa:Venesa000@venesa.ag5zkoi.mongodb.net/?retryWrites=true&w=majority&appName=Venesa"
 client = MongoClient(MONGO_URI)
 db = client["QuickCodes"]
 users_col = db["users"]
@@ -284,7 +284,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
     # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
         await msg.answer(
-            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> {num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<pre>Note: If any problem receiving OTP, then please Instantly DM support @valriking</pre>"
+            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> {num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @valriking</blockquote>"
         )
         # start OTP listener in background
         asyncio.create_task(otp_listener(num, msg.from_user.id))

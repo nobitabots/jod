@@ -256,44 +256,45 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await cq.answer()
 
     # ===== Admin Approval Handlers =====
-    @dp.callback_query(F.data.startswith("approve_txn"))
-    async def approve_txn(cq: CallbackQuery):
-        txn_id = cq.data.split(":")[1]
-        txn = txns_col.find_one({"_id": ObjectId(txn_id)})
+@dp.callback_query(F.data.startswith("approve_txn"))
+async def approve_txn(cq: CallbackQuery):
+    txn_id = cq.data.split(":")[1]
+    txn = txns_col.find_one({"_id": ObjectId(txn_id)})
 
-        if not txn:
-            await cq.answer("Transaction not found!", show_alert=True)
-            return
+    if not txn:
+        await cq.answer("Transaction not found!", show_alert=True)
+        return
 
-        if txn.get("status") == "approved":
-            await cq.answer("Already approved!", show_alert=True)
-            return
+    if txn.get("status") == "approved":
+        await cq.answer("Already approved!", show_alert=True)
+        return
 
-        # Update transaction status
-        txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
+    # Update transaction status
+    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
 
-        # Add balance to user
-        users_col.update_one(
-            {"user_id": txn["user_id"]},
-            {"$inc": {"balance": txn["amount"]}}
-        )
+    # Add balance to user using the same logic as your credit command
+    user = users_col.find_one({"_id": txn["user_id"]})
+    if user:
+        new_balance = user.get("balance", 0.0) + txn["amount"]
+        users_col.update_one({"_id": txn["user_id"]}, {"$set": {"balance": new_balance}})
 
-        await cq.message.edit_caption(cq.message.caption + "\n✅ Approved")
-        await cq.answer("Transaction approved and balance updated!")
+    await cq.message.edit_caption(cq.message.caption + "\n✅ Approved and balance credited")
+    await cq.answer("Transaction approved and balance updated!")
 
-    @dp.callback_query(F.data.startswith("decline_txn"))
-    async def decline_txn(cq: CallbackQuery):
-        txn_id = cq.data.split(":")[1]
-        txn = txns_col.find_one({"_id": ObjectId(txn_id)})
 
-        if not txn:
-            await cq.answer("Transaction not found!", show_alert=True)
-            return
+@dp.callback_query(F.data.startswith("decline_txn"))
+async def decline_txn(cq: CallbackQuery):
+    txn_id = cq.data.split(":")[1]
+    txn = txns_col.find_one({"_id": ObjectId(txn_id)})
 
-        if txn.get("status") == "declined":
-            await cq.answer("Already declined!", show_alert=True)
-            return
+    if not txn:
+        await cq.answer("Transaction not found!", show_alert=True)
+        return
 
-        txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
-        await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
-        await cq.answer("Transaction declined!")
+    if txn.get("status") == "declined":
+        await cq.answer("Already declined!", show_alert=True)
+        return
+
+    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
+    await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
+    await cq.answer("Transaction declined!")

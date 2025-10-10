@@ -143,7 +143,7 @@ async def cmd_start(m: Message):
 
 
 # ================= Balance =================
-@dp.callback_query(F.data=="balance")
+@dp.callback_query(F.data == "balance")
 async def show_balance(cq: CallbackQuery):
     user = users_col.find_one({"_id": cq.from_user.id})
     await cq.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹", show_alert=True)
@@ -153,23 +153,32 @@ async def cmd_balance(msg: Message):
     user = users_col.find_one({"_id": msg.from_user.id})
     await msg.answer(f"💰 Balance: {user['balance']:.2f} ₹" if user else "💰 Balance: 0 ₹")
 
+
 # ================= Buy Flow =================
 async def send_country_menu(message, previous=""):
     countries = await asyncio.to_thread(lambda: list(countries_col.find({})))
     if not countries:
-        return await message.edit_text("❌ No countries available. Admin must add stock first.")
+        return await message.answer("❌ No countries available. Admin must add stock first.")
+
     kb = InlineKeyboardBuilder()
     for c in countries:
         kb.button(text=html.escape(c["name"]), callback_data=f"country:{c['name']}")
     kb.adjust(2)
+
     if previous:
         kb.row(InlineKeyboardButton(text="🔙 Back", callback_data=previous))
-    await message.edit_text("🌍 Select a country:", reply_markup=kb.as_markup())
+
+    # Send a new message for country selection (do not edit the start message)
+    country_msg = await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
+    return country_msg  # return message to use for editing later
+
 
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
-    await send_country_menu(cq.message, previous="start_menu")
+    # Send a new message for countries menu
+    await send_country_menu(cq.message, previous="buy")
+
 
 @dp.callback_query(F.data.startswith("country:"))
 async def callback_country(cq: CallbackQuery):
@@ -178,6 +187,7 @@ async def callback_country(cq: CallbackQuery):
     country = await asyncio.to_thread(lambda: countries_col.find_one({"name": country_name}))
     if not country:
         return await cq.answer("❌ Country not found", show_alert=True)
+
     text = (
         f"⚡ Telegram Account Info\n\n"
         f"🌍 Country : {html.escape(country['name'])}\n"
@@ -187,11 +197,14 @@ async def callback_country(cq: CallbackQuery):
         f"⚠️ Use Telegram X only to login.\n"
         f"🚫 Not responsible for freeze/ban."
     )
+
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="💳 Buy Now", callback_data=f"buy_now:{country_name}"),
-        InlineKeyboardButton(text="🔙 Back", callback_data="buy")
+        InlineKeyboardButton(text="🔙 Back", callback_data="buy")  # Back edits the same message
     )
+
+    # Edit the current country message instead of sending a new one
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
 # ================= Buy Now Flow =================

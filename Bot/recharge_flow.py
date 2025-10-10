@@ -150,7 +150,12 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             "✅ After Payment, Click Deposit Button."
         )
 
-        msg = await cq.message.answer_photo(photo=qr_image, caption=text, parse_mode="HTML", reply_markup=kb.as_markup())
+        msg = await cq.message.answer_photo(
+            photo=qr_image,
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=kb.as_markup()
+        )
         await state.update_data(recharge_msg_id=msg.message_id)
         await cq.answer()
 
@@ -172,18 +177,16 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
         # Send amount input message with calculator
         kb = InlineKeyboardBuilder()
-        # Numeric buttons
         for row in ["123", "456", "789", "0"]:
             for ch in row:
                 kb.button(text=ch, callback_data=f"amount_{ch}")
             kb.adjust(len(row))
-        # Delete and Send buttons
         kb.button(text="❌", callback_data="amount_del")
         kb.button(text="✅", callback_data="amount_send")
         kb.adjust(3)
 
         msg = await message.answer("💰 Enter the amount you sent:\n0", reply_markup=kb.as_markup())
-        await state.update_data(amount_msg_id=msg.message_id, amount_value="")  # store message id + current value
+        await state.update_data(amount_msg_id=msg.message_id, amount_value="")
         await state.set_state(RechargeState.waiting_deposit_amount)
 
     @dp.callback_query(StateFilter(RechargeState.waiting_deposit_amount))
@@ -191,27 +194,26 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         data = await state.get_data()
         value = data.get("amount_value", "")
         msg_id = data.get("amount_msg_id")
+        kb = cq.message.reply_markup
 
         if cq.data.startswith("amount_"):
             key = cq.data.split("_")[1]
-            if key == "del" or key == "❌":
+
+            if key == "del":
                 value = value[:-1]
-            elif key == "send" or key == "✅":
+            elif key == "send":
                 if not value:
                     await cq.answer("❌ Please enter a valid amount.", show_alert=True)
                     return
-                # Save and finish
+
+                # Save transaction
                 await state.update_data(amount=float(value))
                 screenshot = data.get("screenshot")
                 user = cq.from_user
-                user_id = user.id
-                username = user.username
-                full_name = user.full_name
-
                 txn_doc = {
-                    "user_id": user_id,
-                    "username": username,
-                    "full_name": full_name,
+                    "user_id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
                     "amount": float(value),
                     "screenshot": screenshot,
                     "status": "pending",
@@ -219,29 +221,18 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
                 }
                 txn_id = txns_col.insert_one(txn_doc).inserted_id
 
-                await cq.message.edit_text(f"✅ Your payment request of ₹{value} has been sent to the admin.\nPlease wait for approval or DM @hehe_stalker for faster approvals.")
+                await cq.message.edit_text(
+                    f"✅ Your payment request of ₹{value} has been sent to the admin.\n"
+                    "Please wait for approval or DM @hehe_stalker for faster approvals."
+                )
                 await state.clear()
 
                 kb_admin = InlineKeyboardBuilder()
-                kb_admin.button(text="✅ Approve", callback_data=f"approve_txn:{str(txn_id)}")
-                kb_admin.button(text="❌ Decline", callback_data=f"decline_txn:{str(txn_id)}")
+                kb_admin.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
+                kb_admin.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
                 kb_admin.adjust(2)
 
-# ===== Admin Approval Handlers =====
-@dp.callback_query(F.data.startswith("approve_txn"))
-async def approve_txn(cq: CallbackQuery):
-    txn_id = cq.data.split(":")[1]
-    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
-    await cq.message.edit_caption(cq.message.caption + "\n✅ Approved")
-    await cq.answer("Transaction approved!")
-
-@dp.callback_query(F.data.startswith("decline_txn"))
-async def decline_txn(cq: CallbackQuery):
-    txn_id = cq.data.split(":")[1]
-    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
-    await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
-    await cq.answer("Transaction declined!")
-                
+                # Send to admins
                 for admin_id in ADMIN_IDS:
                     try:
                         await bot.send_photo(
@@ -249,9 +240,9 @@ async def decline_txn(cq: CallbackQuery):
                             photo=screenshot,
                             caption=(
                                 f"<b>Payment Approval Request</b>\n\n"
-                                f"Name: {full_name}\n"
-                                f"Username: @{username}\n"
-                                f"ID: {user_id}\n"
+                                f"Name: {user.full_name}\n"
+                                f"Username: @{user.username}\n"
+                                f"ID: {user.id}\n"
                                 f"Amount: {value}"
                             ),
                             parse_mode="HTML",
@@ -264,8 +255,22 @@ async def decline_txn(cq: CallbackQuery):
             else:
                 value += key
 
-        # Update message with current value
         display_value = value if value else "0"
-        await cq.message.edit_text(f"💰 Enter the amount you sent:\n{display_value}", reply_markup=cq.message.reply_markup)
+        await cq.message.edit_text(f"💰 Enter the amount you sent:\n{display_value}", reply_markup=kb)
         await state.update_data(amount_value=value)
         await cq.answer()
+
+    # ===== Admin Approval Handlers =====
+    @dp.callback_query(F.data.startswith("approve_txn"))
+    async def approve_txn(cq: CallbackQuery):
+        txn_id = cq.data.split(":")[1]
+        txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
+        await cq.message.edit_caption(cq.message.caption + "\n✅ Approved")
+        await cq.answer("Transaction approved!")
+
+    @dp.callback_query(F.data.startswith("decline_txn"))
+    async def decline_txn(cq: CallbackQuery):
+        txn_id = cq.data.split(":")[1]
+        txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
+        await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
+        await cq.answer("Transaction declined!")

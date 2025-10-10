@@ -249,8 +249,11 @@ async def handle_quantity(msg: Message, state: FSMContext):
             f"🚫 Insufficient Balance!\n💰 Your Balance: ₹{user_balance:.2f}\n🧾 Total Required: ₹{total_cost:.2f}",
             reply_markup=kb.as_markup()
         )
-    if country_stock < quantity:
-        return await msg.answer(f"❌ Only {country_stock} account(s) left for {country_name}.")
+
+        
+        if country_stock < quantity:
+    await state.clear()  # <- ADD THIS LINE
+    return await msg.answer(f"❌ Only {country_stock} account(s) left for {country_name}.")
 
     unsold_numbers = await asyncio.to_thread(lambda: list(numbers_col.find({"country": country_name, "used": False}).limit(quantity)))
     if len(unsold_numbers) < quantity:

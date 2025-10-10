@@ -149,20 +149,24 @@ async def cmd_balance(msg: Message):
 async def send_country_menu(message, previous=""):
     countries = await asyncio.to_thread(lambda: list(countries_col.find({})))
     if not countries:
-        return await message.edit_text("❌ No countries available. Admin must add stock first.")
+        return await message.answer("❌ No countries available. Admin must add stock first.")
+    
     kb = InlineKeyboardBuilder()
     for c in countries:
         kb.button(text=html.escape(c["name"]), callback_data=f"country:{c['name']}")
     kb.adjust(2)
+    
     if previous:
         kb.row(InlineKeyboardButton(text="🔙 Back", callback_data=previous))
-    await message.edit_text("🌍 Select a country:", reply_markup=kb.as_markup())
+    
+    # Send a new message instead of editing
+    await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
+
 
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
     await send_country_menu(cq.message, previous="start_menu")
-
 @dp.callback_query(F.data.startswith("country:"))
 async def callback_country(cq: CallbackQuery):
     await cq.answer()

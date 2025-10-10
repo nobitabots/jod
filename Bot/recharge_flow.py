@@ -158,35 +158,31 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
 
-    # ===== Screenshot Received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot), F.photo)
-    async def screenshot_received(msg: Message, state: FSMContext):
-        await state.update_data(screenshot=msg.photo[-1].file_id)
-        await msg.answer("💰 Enter the amount you sent (in ₹):")
+    async def screenshot_received(message: Message, state: FSMContext):
+        await state.update_data(screenshot=message.photo[-1].file_id)
+        await message.answer("💰 Enter the amount you sent:")
         await state.set_state(RechargeState.waiting_deposit_amount)
 
-    # ===== Amount Received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_amount), F.text)
-    async def amount_received(msg: Message, state: FSMContext):
-        amount_text = msg.text.strip()
-        if not amount_text.replace(".", "", 1).isdigit():
-            await msg.answer("❌ Invalid amount. Enter only numbers (e.g., 100).")
+    async def amount_received(message: Message, state: FSMContext):
+        amount = message.text.strip()
+        if not amount.replace(".", "").isdigit():
+            await message.answer("❌ Invalid amount. Enter numbers only.")
             return
-        await state.update_data(amount=float(amount_text))
-        await msg.answer("🔑 Please send your Payment ID / UTR:")
+        await state.update_data(amount=float(amount))
+        await message.answer("🔑 Please send your Payment ID or UTR:")
         await state.set_state(RechargeState.waiting_payment_id)
 
-    # ===== Payment ID Received =====
     @dp.message(StateFilter(RechargeState.waiting_payment_id), F.text)
-    async def payment_id_received(msg: Message, state: FSMContext):
+    async def payment_id_received(message: Message, state: FSMContext):
         data = await state.get_data()
         screenshot = data.get("screenshot")
         amount = data.get("amount")
-        payment_id = msg.text.strip()
-
-        user_id = msg.from_user.id
-        username = msg.from_user.username or "None"
-        full_name = msg.from_user.full_name
+        payment_id = message.text.strip()
+        user_id = message.from_user.id
+        username = message.from_user.username
+        full_name = message.from_user.full_name
 
         txn_doc = {
             "user_id": user_id,

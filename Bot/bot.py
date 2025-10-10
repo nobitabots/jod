@@ -13,7 +13,7 @@ from pymongo import MongoClient
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 import re
-
+from aiogram.types import InputMediaVideo
 from recharge_flow import register_recharge_handlers
 from readymade_accounts import register_readymade_accounts_handlers
 from mustjoin import check_join

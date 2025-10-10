@@ -10,7 +10,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pymongo import MongoClient
-from telethon import TelegramClient, events
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError
 import re
@@ -39,8 +39,11 @@ class AddNumberStates(StatesGroup):
     waiting_number = State()
     waiting_password = State()
 
-# ================= OTP Listener Global Dict =================
-active_otp_listeners: dict[str, TelegramClient] = {}
+class AddSession(StatesGroup):
+    waiting_country = State()
+    waiting_number = State()
+    waiting_otp = State()
+    waiting_password = State()
 
 # ================= Helpers =================
 def get_or_create_user(user_id: int, username: str | None):
@@ -52,6 +55,27 @@ def get_or_create_user(user_id: int, username: str | None):
 
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
+
+# ================= OTP Fetcher =================
+async def otp_searcher(strses: str) -> str:
+    """
+    Fetches the latest 5-digit OTP from Telegram's 777000 bot using the string session.
+    """
+    api_id = int(os.getenv("API_ID"))
+    api_hash = os.getenv("API_HASH")
+    async with TelegramClient(StringSession(strses), api_id, api_hash) as client:
+        code = ""
+        try:
+            async for message in client.iter_messages(777000, limit=5, search="Login code"):
+                if message.message:
+                    pattern = r"\b\d{5}\b"
+                    match = re.search(pattern, message.message)
+                    if match:
+                        code = match.group(0)
+                        break
+        except Exception as e:
+            print(f"OTP fetch error: {e}")
+        return code if code else 'NOT FOUND TRY SENDING CODE AGAIN'
 
 # ================= START =================
 @dp.message(Command("start"))
@@ -203,7 +227,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
             print("DB update error:", e)
     await asyncio.to_thread(update_db)
 
-    # Send numbers to user
+    # Send numbers to user with OTP button
     for num in unsold_numbers:
         kb = InlineKeyboardBuilder()
         kb.row(InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{num['_id']}"))
@@ -213,53 +237,19 @@ async def handle_quantity(msg: Message, state: FSMContext):
         )
     await state.clear()
 
-# ================= Real-Time OTP Listener =================
+# ================= Grab OTP =================
 @dp.callback_query(F.data.startswith("grab_otp:"))
 async def callback_grab_otp(cq: CallbackQuery):
-    await cq.answer("⏳ Starting OTP listener...", show_alert=True)
+    await cq.answer("⏳ Fetching OTP...", show_alert=True)
     _, number_id = cq.data.split(":", 1)
 
     number_doc = await asyncio.to_thread(lambda: numbers_col.find_one({"_id": number_id}))
-    if not number_doc:
-        return await cq.answer("❌ Number not found.", show_alert=True)
+    if not number_doc or not number_doc.get("string_session"):
+        return await cq.answer("❌ Number or session not found.", show_alert=True)
 
-    string_session = number_doc.get("string_session")
-    if not string_session:
-        return await cq.answer("❌ No string session found for this number.", show_alert=True)
+    code = await otp_searcher(number_doc["string_session"])
+    await cq.message.answer(f"✅ OTP for {number_doc['number']}:\n<code>{code}</code>", parse_mode="HTML")
 
-    api_id = int(os.getenv("API_ID"))
-    api_hash = os.getenv("API_HASH")
-
-    if number_id in active_otp_listeners:
-        return await cq.answer("⚠️ OTP listener already running for this number.", show_alert=True)
-
-    client = TelegramClient(StringSession(string_session), api_id, api_hash)
-    active_otp_listeners[number_id] = client
-
-    pattern = re.compile(r"\b\d{4,6}\b")
-
-    async def handler(event):
-        if event.message and event.message.message:
-            match = pattern.search(event.message.message)
-            if match:
-                code = match.group(0)
-                await cq.message.answer(f"✅ OTP for {number_doc['number']}:\n<code>{code}</code>", parse_mode="HTML")
-                await asyncio.to_thread(lambda: numbers_col.update_one(
-                    {"_id": number_doc["_id"]},
-                    {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}}
-                ))
-                await client.disconnect()
-                active_otp_listeners.pop(number_id, None)
-
-    client.add_event_handler(handler, events.NewMessage(chats=777000))
-
-    try:
-        await client.start()
-        await cq.message.answer("⏳ OTP listener started. Waiting for new OTP...")
-        await client.run_until_disconnected()
-    except Exception as e:
-        await cq.message.answer(f"❌ OTP listener error:\n<code>{html.escape(str(e))}</code>", parse_mode="HTML")
-        active_otp_listeners.pop(number_id, None)
 
 # ===== Admin Add Number Flow =====
 class AddSession(StatesGroup):

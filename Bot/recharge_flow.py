@@ -1,7 +1,7 @@
 import datetime
 from bson import ObjectId
 from aiogram import F
-from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile, InputMediaPhoto
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
@@ -18,20 +18,24 @@ class RechargeState(StatesGroup):
 
 
 def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
-    """Register manual recharge flow."""
+    """
+    Registers recharge flow handlers.
+    """
 
     # ===== Helper =====
     async def start_recharge_flow(message: Message, state: FSMContext):
         kb = InlineKeyboardBuilder()
         kb.button(text="Pay Manually", callback_data="recharge_manual")
-        kb.adjust(1)
+        kb.button(text="Automatic", callback_data="recharge_auto")
+        kb.adjust(2)
 
         text = (
             "💰 Add Funds to Your Account\n\n"
-            "We currently accept only UPI payments.\n\n"
-            "⚙️ Automatic payments are disabled for now.\n"
-            "💡 Choose Manual Recharge below."
+            "We only accept payments via UPI.\n"
+            "• Automatic payments have been stopped for security reasons.\n\n"
+            "Please choose a method below:"
         )
+
         msg = await message.answer(text, reply_markup=kb.as_markup())
         await state.update_data(recharge_msg_id=msg.message_id)
         await state.set_state(RechargeState.choose_method)
@@ -39,8 +43,8 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
     # ===== Entry Points =====
     @dp.callback_query(F.data == "recharge")
     async def recharge_start_button(cq: CallbackQuery, state: FSMContext):
-        await cq.answer()
         await start_recharge_flow(cq.message, state)
+        await cq.answer()
 
     @dp.message(Command("recharge"))
     async def recharge_start_command(message: Message, state: FSMContext):
@@ -48,37 +52,73 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             return
         await start_recharge_flow(message, state)
 
-    # ===== Manual Payment Selected =====
+    # ===== Flow Handlers =====
+    @dp.callback_query(F.data == "recharge_auto", StateFilter(RechargeState.choose_method))
+    async def recharge_auto(cq: CallbackQuery):
+        await cq.answer(
+            "⚠️ Automatic payment feature is currently unavailable. Please choose manual payment.",
+            show_alert=True
+        )
+
     @dp.callback_query(F.data == "recharge_manual", StateFilter(RechargeState.choose_method))
     async def recharge_manual(cq: CallbackQuery, state: FSMContext):
-        await cq.answer()
         data = await state.get_data()
         msg_id = data.get("recharge_msg_id")
 
         kb = InlineKeyboardBuilder()
         kb.button(text="Deposit Now", callback_data="deposit_now")
-        kb.adjust(1)
+        kb.button(text="Go Back", callback_data="go_back")
+        kb.adjust(2)
 
         text = (
             f"👋 Hello {cq.from_user.full_name},\n\n"
-            "You selected Manual Recharge.\n"
-            "Pay via UPI, then click Deposit Now."
+            "You have chosen the manual method to add balance to your account.\n\n"
+            "Pay via UPI and wait for admin approval.\n"
+            "➡️ Click <b>Deposit Now</b> when ready."
         )
+
         await bot.edit_message_text(
+            text=text,
             chat_id=cq.from_user.id,
             message_id=msg_id,
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML"
+        )
+        await cq.answer()
+
+    @dp.callback_query(F.data == "go_back", StateFilter(RechargeState.choose_method))
+    async def recharge_go_back(cq: CallbackQuery, state: FSMContext):
+        data = await state.get_data()
+        msg_id = data.get("recharge_msg_id")
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="Pay Manually", callback_data="recharge_manual")
+        kb.button(text="Automatic", callback_data="recharge_auto")
+        kb.adjust(2)
+
+        text = (
+            "💰 Add Funds to Your Account\n\n"
+            "We only accept payments via UPI.\n"
+            "• Automatic payments have been stopped for security reasons.\n\n"
+            "Please choose a method below:"
+        )
+
+        await bot.edit_message_text(
             text=text,
+            chat_id=cq.from_user.id,
+            message_id=msg_id,
             reply_markup=kb.as_markup()
         )
+        await cq.answer()
 
     # ===== Deposit Now =====
     @dp.callback_query(F.data == "deposit_now", StateFilter(RechargeState.choose_method))
     async def deposit_now(cq: CallbackQuery, state: FSMContext):
-        await cq.answer()
         data = await state.get_data()
         msg_id = data.get("recharge_msg_id")
 
         qr_image = FSInputFile("IMG_20251008_085640_972.jpg")
+
         kb = InlineKeyboardBuilder()
         kb.button(text="✅ I've Paid", callback_data="paid_done")
         kb.adjust(1)
@@ -88,48 +128,47 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             "Or scan the QR below 👇\n\n"
             "✅ After paying, click 'I've Paid'."
         )
+
+        media = InputMediaPhoto(media=qr_image, caption=caption, parse_mode="HTML")
+
         await bot.edit_message_media(
             chat_id=cq.from_user.id,
             message_id=msg_id,
-            media=qr_image,
-            caption=caption,
-            parse_mode="HTML",
+            media=media,
             reply_markup=kb.as_markup()
         )
         await state.set_state(RechargeState.waiting_deposit_screenshot)
+        await cq.answer()
 
-    # ===== User confirms payment done =====
+    # ===== User sends screenshot =====
     @dp.callback_query(F.data == "paid_done", StateFilter(RechargeState.waiting_deposit_screenshot))
     async def paid_done(cq: CallbackQuery, state: FSMContext):
         await cq.answer()
         await cq.message.answer("📸 Please send a screenshot of your payment.")
         await state.set_state(RechargeState.waiting_deposit_screenshot)
 
-    # ===== Screenshot received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot), F.photo)
     async def screenshot_received(msg: Message, state: FSMContext):
         await state.update_data(screenshot=msg.photo[-1].file_id)
-        await msg.answer("💰 Please enter the <b>amount</b> you sent (in ₹):", parse_mode="HTML")
+        await msg.answer("💰 Enter the amount you sent (in ₹):")
         await state.set_state(RechargeState.waiting_deposit_amount)
 
-    # ===== Amount received =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_amount), F.text)
     async def amount_received(msg: Message, state: FSMContext):
-        text = msg.text.strip()
-        if not text.replace(".", "", 1).isdigit():
-            return await msg.answer("❌ Invalid amount. Please enter a number (e.g., 100).")
-        await state.update_data(amount=float(text))
+        amount = msg.text.strip()
+        if not amount.replace(".", "").isdigit():
+            await msg.answer("❌ Invalid amount. Please send a number (e.g., 100).")
+            return
+        await state.update_data(amount=float(amount))
         await msg.answer("🔑 Please send your Payment ID / UTR:")
         await state.set_state(RechargeState.waiting_payment_id)
 
-    # ===== Payment ID received =====
     @dp.message(StateFilter(RechargeState.waiting_payment_id), F.text)
     async def payment_id_received(msg: Message, state: FSMContext):
         data = await state.get_data()
         screenshot = data.get("screenshot")
         amount = data.get("amount")
         payment_id = msg.text.strip()
-
         user_id = msg.from_user.id
         username = msg.from_user.username or "None"
         full_name = msg.from_user.full_name
@@ -142,21 +181,21 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             "payment_id": payment_id,
             "screenshot": screenshot,
             "status": "pending",
-            "created_at": datetime.datetime.utcnow(),
+            "created_at": datetime.datetime.utcnow()
         }
         txn_id = txns_col.insert_one(txn_doc).inserted_id
 
         await msg.answer(
-            "✅ Your payment request has been sent to admin for approval.\n⏳ Please wait 5–10 minutes."
+            "✅ Your payment request has been sent to the admin. Please wait for approval or DM @hehe_stalker for faster approval."
         )
         await state.clear()
 
-        # Notify Admins
         kb = InlineKeyboardBuilder()
         kb.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
         kb.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
         kb.adjust(2)
 
+        # Notify admins
         for admin_id in ADMIN_IDS:
             try:
                 await bot.send_photo(
@@ -166,12 +205,12 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
                         f"<b>Payment Approval Request</b>\n\n"
                         f"Name: {full_name}\n"
                         f"Username: @{username}\n"
-                        f"User ID: {user_id}\n"
+                        f"ID: {user_id}\n"
                         f"Amount: ₹{amount}\n"
-                        f"UTR/Payment ID: {payment_id}"
+                        f"UTR / Payment ID: {payment_id}"
                     ),
                     parse_mode="HTML",
                     reply_markup=kb.as_markup()
                 )
-            except Exception as e:
-                print("Admin notification error:", e)
+            except Exception:
+                pass

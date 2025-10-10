@@ -363,18 +363,21 @@ async def add_number_with_password(msg: Message, state: FSMContext):
         await msg.answer(f"❌ Error signing in with password: {e}")
 
 # ===== Admin commands =====
+
+# --- Add Country ---
 @dp.message(Command("addcountry"))
-async def cmd_add_country(msg: Message):
+async def cmd_add_country(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
     await msg.answer("🌍 Send the country name and price separated by a comma (e.g., India,50):")
+    await state.set_state("adding_country")
 
-@dp.message()
-async def handle_add_country(msg: Message):
+@dp.message(StateFilter("adding_country"))
+async def handle_add_country(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return
     if "," not in msg.text:
-        return
+        return await msg.answer("❌ Invalid format. Example: India,50")
     name, price = msg.text.split(",", 1)
     try:
         price = float(price.strip())
@@ -382,32 +385,44 @@ async def handle_add_country(msg: Message):
         return await msg.answer("❌ Invalid price format.")
     countries_col.update_one({"name": name.strip()}, {"$set": {"price": price, "stock": 0}}, upsert=True)
     await msg.answer(f"✅ Country {name.strip()} added/updated with price {price}.")
+    await state.clear()
 
-
+# --- Remove Country ---
 @dp.message(Command("removecountry"))
-async def cmd_remove_country(msg: Message):
+async def cmd_remove_country(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
     await msg.answer("🌍 Send the country name to remove:")
+    await state.set_state("removing_country")
 
-
-@dp.message()
-async def handle_remove_country(msg: Message):
+@dp.message(StateFilter("removing_country"))
+async def handle_remove_country(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return
-    countries_col.delete_one({"name": msg.text.strip()})
-    await msg.answer(f"✅ Country {msg.text.strip()} removed.")
+    result = countries_col.delete_one({"name": msg.text.strip()})
+    if result.deleted_count == 0:
+        await msg.answer(f"❌ Country {msg.text.strip()} not found.")
+    else:
+        await msg.answer(f"✅ Country {msg.text.strip()} removed.")
+    await state.clear()
 
-
+# --- Show All Numbers in DB ---
 @dp.message(Command("db"))
 async def cmd_db(msg: Message):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
-    numbers = numbers_col.find({})
+    numbers = list(numbers_col.find({}))
+    if not numbers:
+        return await msg.answer("❌ No numbers in DB.")
+    
     text = "<b>All numbers in DB:</b>\n\n"
     for n in numbers:
         text += f"📱 {n['number']} | Country: {n['country']} | Used: {n['used']}\n"
-    await msg.answer(text)
+        if len(text) > 3000:  # Telegram message limit safeguard
+            await msg.answer(text)
+            text = ""
+    if text:
+        await msg.answer(text)
         
 # ===== Register external handlers =====
 register_readymade_accounts_handlers(dp=dp, bot=bot, users_col=users_col)

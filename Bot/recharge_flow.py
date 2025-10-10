@@ -180,7 +180,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         # Delete and Send buttons
         kb.button(text="❌", callback_data="amount_del")
         kb.button(text="✅", callback_data="amount_send")
-        kb.adjust(2)
+        kb.adjust(3)
 
         msg = await message.answer("💰 Enter the amount you sent:\n0", reply_markup=kb.as_markup())
         await state.update_data(amount_msg_id=msg.message_id, amount_value="")  # store message id + current value
@@ -227,6 +227,21 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
                 kb_admin.button(text="❌ Decline", callback_data=f"decline_txn:{str(txn_id)}")
                 kb_admin.adjust(2)
 
+# ===== Admin Approval Handlers =====
+@dp.callback_query(F.data.startswith("approve_txn"))
+async def approve_txn(cq: CallbackQuery):
+    txn_id = cq.data.split(":")[1]
+    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
+    await cq.message.edit_caption(cq.message.caption + "\n✅ Approved")
+    await cq.answer("Transaction approved!")
+
+@dp.callback_query(F.data.startswith("decline_txn"))
+async def decline_txn(cq: CallbackQuery):
+    txn_id = cq.data.split(":")[1]
+    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "declined"}})
+    await cq.message.edit_caption(cq.message.caption + "\n❌ Declined")
+    await cq.answer("Transaction declined!")
+                
                 for admin_id in ADMIN_IDS:
                     try:
                         await bot.send_photo(

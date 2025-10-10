@@ -259,34 +259,34 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         txn_id = cq.data.split(":")[1]
         txn = txns_col.find_one({"_id": ObjectId(txn_id)})
 
-    if not txn:
-        await cq.answer("Transaction not found!", show_alert=True)
-        return
+        if not txn:
+            await cq.answer("Transaction not found!", show_alert=True)
+            return
 
-    if txn.get("status") == "approved":
-        await cq.answer("Already approved!", show_alert=True)
-        return
+        if txn.get("status") == "approved":
+            await cq.answer("Already approved!", show_alert=True)
+            return
 
-    # Update transaction status
-    txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
+        # Update transaction status
+        txns_col.update_one({"_id": ObjectId(txn_id)}, {"$set": {"status": "approved"}})
 
-    # Add balance to user
-    user = users_col.find_one({"_id": txn["user_id"]})
-    if user:
-        new_balance = user.get("balance", 0.0) + txn["amount"]
-        users_col.update_one({"_id": txn["user_id"]}, {"$set": {"balance": new_balance}})
+        # Add balance to user
+        user = users_col.find_one({"_id": txn["user_id"]})
+        if user:
+            new_balance = user.get("balance", 0.0) + txn["amount"]
+            users_col.update_one({"_id": txn["user_id"]}, {"$set": {"balance": new_balance}})
 
-        # Send message to user that payment approved
-        try:
-            await bot.send_message(
-                chat_id=txn["user_id"],
-                text=f"✅ Your payment of ₹{txn['amount']} has been approved and your new balance is ₹{new_balance:.2f}."
-            )
-        except Exception:
-            pass
+            # Send message to user that payment approved
+            try:
+                await bot.send_message(
+                    chat_id=txn["user_id"],
+                    text=f"✅ Your payment of ₹{txn['amount']} has been approved and your new balance is ₹{new_balance:.2f}."
+                )
+            except Exception:
+                pass
 
-    await cq.message.edit_caption(cq.message.caption + "\n✅ Approved and balance credited")
-    await cq.answer("Transaction approved and balance updated!")
+        await cq.message.edit_caption(cq.message.caption + "\n✅ Approved and balance credited")
+        await cq.answer("Transaction approved and balance updated!")
 
     @dp.callback_query(F.data.startswith("decline_txn"))
     async def decline_txn(cq: CallbackQuery):

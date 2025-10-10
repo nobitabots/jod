@@ -255,9 +255,9 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
     # ===== Admin Approval Handlers =====
     @dp.callback_query(F.data.startswith("approve_txn"))
-async def approve_txn(cq: CallbackQuery):
-    txn_id = cq.data.split(":")[1]
-    txn = txns_col.find_one({"_id": ObjectId(txn_id)})
+    async def approve_txn(cq: CallbackQuery):
+        txn_id = cq.data.split(":")[1]
+        txn = txns_col.find_one({"_id": ObjectId(txn_id)})
 
     if not txn:
         await cq.answer("Transaction not found!", show_alert=True)

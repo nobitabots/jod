@@ -128,11 +128,12 @@ async def callback_country(cq: CallbackQuery):
         f"⚠️ Use Telegram X only to login.\n"
         f"🚫 Not responsible for freeze/ban."
     )
+    
     kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(text="💳 Buy Now", callback_data=f"buy_now:{country_name}"),
-        InlineKeyboardButton(text="🔙 Back", callback_data="buy")
-    )
+        kb.button(text="💳 Buy Now", callback_data=f"buy_now : {country_name}"),
+        kb.button(text="🔙 Back", callback_data="buy"),
+        kb.adjust(1)
+    
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
 # ===== BUY NOW & OTP FLOW =====

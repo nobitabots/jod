@@ -136,31 +136,36 @@ async def callback_country(cq: CallbackQuery):
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
 # ===== Buy Now Flow with OTP grab from string session =====
-from telethon.errors import SessionPasswordNeededError
 
 @dp.callback_query(F.data.startswith("buy_now:"))
 async def callback_buy_now(cq: CallbackQuery):
     await cq.answer()
     _, country_name = cq.data.split(":", 1)
-    
+
+    # --- Fetch country ---
     country = countries_col.find_one({"name": country_name})
     if not country:
         return await cq.answer("❌ Country not found", show_alert=True)
-    
+
+    # --- Fetch user ---
     user = get_or_create_user(cq.from_user.id, cq.from_user.username)
-    
-    if user["balance"] < country["price"]:
+
+    # --- Check balance ---
+    if user.get("balance", 0) < country.get("price", 0):
         return await cq.answer("⚠️ Insufficient balance", show_alert=True)
-    
+
+    # --- Fetch available number ---
     number_doc = numbers_col.find_one({"country": country_name, "used": False})
     if not number_doc:
         return await cq.answer("❌ No available numbers for this country.", show_alert=True)
-    
-    # Deduct balance and mark number as used
-    users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -country["price"]}})
+
+    # --- Deduct balance & mark number used ---
+    new_balance = user["balance"] - country["price"]
+    users_col.update_one({"_id": user["_id"]}, {"$set": {"balance": new_balance}})
     numbers_col.update_one({"_id": number_doc["_id"]}, {"$set": {"used": True}})
     countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
-    
+
+    # --- Insert order ---
     orders_col.insert_one({
         "user_id": user["_id"],
         "country": country_name,
@@ -169,23 +174,24 @@ async def callback_buy_now(cq: CallbackQuery):
         "status": "purchased",
         "created_at": datetime.datetime.utcnow()
     })
-    
+
+    # --- Build keyboard for OTP ---
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}")
     )
-    
+
+    # --- Send message ---
     text = (
         f"✅ Purchase Successful!\n\n"
         f"🌍 Country: {html.escape(country_name)}\n"
         f"📱 Your Number: {html.escape(number_doc['number'])}\n"
         f"💸 Deducted: {country['price']}\n"
-        f"💰 Balance Left: {user['balance'] - country['price']:.2f}\n\n"
+        f"💰 Balance Left: {new_balance:.2f}\n\n"
         "👉 Click below to get OTP when you are ready to login in Telegram."
     )
-    
-    await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
+    await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data.startswith("grab_otp:"))
 async def callback_grab_otp(cq: CallbackQuery):

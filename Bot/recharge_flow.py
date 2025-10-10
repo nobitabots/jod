@@ -1,12 +1,13 @@
 import datetime
 from bson import ObjectId
 from aiogram import F
-from aiogram.types import CallbackQuery, Message, FSInputFile, InputMediaPhoto
+from aiogram.types import CallbackQuery, Message, FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import StateFilter, Command
 from mustjoin import check_join
+
 
 # ===== Recharge FSM =====
 class RechargeState(StatesGroup):
@@ -14,6 +15,7 @@ class RechargeState(StatesGroup):
     waiting_deposit_screenshot = State()
     waiting_deposit_amount = State()
     waiting_payment_id = State()
+
 
 def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
     """Registers recharge flow handlers."""
@@ -43,10 +45,10 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await cq.answer()
 
     @dp.message(Command("recharge"))
-    async def recharge_start_command(message: Message, state: FSMContext):
-        if not await check_join(bot, message):
+    async def recharge_start_command(msg: Message, state: FSMContext):
+        if not await check_join(bot, msg):
             return
-        await start_recharge_flow(message, state)
+        await start_recharge_flow(msg, state)
 
     # ===== Automatic Not Available =====
     @dp.callback_query(F.data == "recharge_auto", StateFilter(RechargeState.choose_method))
@@ -112,7 +114,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
     # ===== Deposit Now =====
     @dp.callback_query(F.data == "deposit_now", StateFilter(RechargeState.choose_method))
     async def deposit_now(cq: CallbackQuery, state: FSMContext):
-        # Delete previous recharge message (optional)
+        # Delete previous recharge message if exists
         data = await state.get_data()
         msg_id = data.get("recharge_msg_id")
         try:
@@ -138,93 +140,91 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             parse_mode="HTML",
             reply_markup=kb.as_markup()
         )
-        # Save this QR message_id for deletion if needed
         await state.update_data(recharge_msg_id=msg.message_id)
         await cq.answer()
-        await state.set_state(RechargeState.waiting_deposit_screenshot)
 
     # ===== Paid Done =====
-    @dp.callback_query(F.data == "paid_done", StateFilter(RechargeState.waiting_deposit_screenshot))
+    @dp.callback_query(F.data == "paid_done", StateFilter(RechargeState.choose_method))
     async def paid_done(cq: CallbackQuery, state: FSMContext):
-        # Delete QR message after click
+        # Delete QR message
         data = await state.get_data()
         qr_msg_id = data.get("recharge_msg_id")
         try:
             await bot.delete_message(chat_id=cq.from_user.id, message_id=qr_msg_id)
         except:
             pass
+
         await cq.message.answer("📸 Please send a screenshot of your payment.")
         await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
 
-# ===== Screenshot Received =====
-@dp.message(StateFilter(RechargeState.waiting_deposit_screenshot), F.photo)
-async def screenshot_received(msg: Message, state: FSMContext):
-    await state.update_data(screenshot=msg.photo[-1].file_id)
-    # Use msg.answer instead of edit_text
-    await msg.answer("💰 Enter the amount you sent (in ₹):")
-    await state.set_state(RechargeState.waiting_deposit_amount)
+    # ===== Screenshot Received =====
+    @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot), F.photo)
+    async def screenshot_received(msg: Message, state: FSMContext):
+        await state.update_data(screenshot=msg.photo[-1].file_id)
+        await msg.answer("💰 Enter the amount you sent (in ₹):")
+        await state.set_state(RechargeState.waiting_deposit_amount)
 
-# ===== Amount Received =====
-@dp.message(StateFilter(RechargeState.waiting_deposit_amount), F.text)
-async def amount_received(msg: Message, state: FSMContext):
-    amount_text = msg.text.strip()
-    if not amount_text.replace(".", "", 1).isdigit():
-        await msg.answer("❌ Invalid amount. Enter only numbers (e.g., 100).")
-        return
-    await state.update_data(amount=float(amount_text))
-    await msg.answer("🔑 Please send your Payment ID / UTR:")
-    await state.set_state(RechargeState.waiting_payment_id)
+    # ===== Amount Received =====
+    @dp.message(StateFilter(RechargeState.waiting_deposit_amount), F.text)
+    async def amount_received(msg: Message, state: FSMContext):
+        amount_text = msg.text.strip()
+        if not amount_text.replace(".", "", 1).isdigit():
+            await msg.answer("❌ Invalid amount. Enter only numbers (e.g., 100).")
+            return
+        await state.update_data(amount=float(amount_text))
+        await msg.answer("🔑 Please send your Payment ID / UTR:")
+        await state.set_state(RechargeState.waiting_payment_id)
 
-# ===== Payment ID Received =====
-@dp.message(StateFilter(RechargeState.waiting_payment_id), F.text)
-async def payment_id_received(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    screenshot = data.get("screenshot")
-    amount = data.get("amount")
-    payment_id = msg.text.strip()
+    # ===== Payment ID Received =====
+    @dp.message(StateFilter(RechargeState.waiting_payment_id), F.text)
+    async def payment_id_received(msg: Message, state: FSMContext):
+        data = await state.get_data()
+        screenshot = data.get("screenshot")
+        amount = data.get("amount")
+        payment_id = msg.text.strip()
 
-    user_id = msg.from_user.id
-    username = msg.from_user.username or "None"
-    full_name = msg.from_user.full_name
+        user_id = msg.from_user.id
+        username = msg.from_user.username or "None"
+        full_name = msg.from_user.full_name
 
-    txn_doc = {
-        "user_id": user_id,
-        "username": username,
-        "full_name": full_name,
-        "amount": amount,
-        "payment_id": payment_id,
-        "screenshot": screenshot,
-        "status": "pending",
-        "created_at": datetime.datetime.utcnow()
-    }
-    txn_id = txns_col.insert_one(txn_doc).inserted_id
+        txn_doc = {
+            "user_id": user_id,
+            "username": username,
+            "full_name": full_name,
+            "amount": amount,
+            "payment_id": payment_id,
+            "screenshot": screenshot,
+            "status": "pending",
+            "created_at": datetime.datetime.utcnow()
+        }
+        txn_id = txns_col.insert_one(txn_doc).inserted_id
 
-    await msg.answer(
-        "✅ Your payment request has been sent to the admin. Please wait for approval."
-    )
-    await state.clear()
+        await msg.answer(
+            "✅ Your payment request has been sent to the admin. Please wait for approval."
+        )
+        await state.clear()
 
-    kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
-    kb.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
-    kb.adjust(2)
+        kb = InlineKeyboardBuilder()
+        kb.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
+        kb.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
+        kb.adjust(2)
 
-    for admin_id in ADMIN_IDS:
-        try:
-            await bot.send_photo(
-                chat_id=admin_id,
-                photo=screenshot,
-                caption=(
-                    f"<b>Payment Approval Request</b>\n\n"
-                    f"Name: {full_name}\n"
-                    f"Username: @{username}\n"
-                    f"ID: {user_id}\n"
-                    f"Amount: ₹{amount}\n"
-                    f"UTR / Payment ID: {payment_id}"
-                ),
-                parse_mode="HTML",
-                reply_markup=kb.as_markup()
-            )
-        except Exception:
-            pass
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_photo(
+                    chat_id=admin_id,
+                    photo=screenshot,
+                    caption=(
+                        f"<b>Payment Approval Request</b>\n\n"
+                        f"Name: {full_name}\n"
+                        f"Username: @{username}\n"
+                        f"ID: {user_id}\n"
+                        f"Amount: ₹{amount}\n"
+                        f"UTR / Payment ID: {payment_id}"
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=kb.as_markup()
+                )
+            except Exception:
+                pass

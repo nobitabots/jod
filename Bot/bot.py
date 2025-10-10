@@ -135,11 +135,11 @@ async def callback_country(cq: CallbackQuery):
     )
     await cq.message.edit_text(text, reply_markup=kb.as_markup())
 
-# ===== BUY NOW & OTP =====
+# ===== BUY NOW & OTP FLOW =====
 @dp.callback_query(F.data.startswith("buy_now:"))
 async def callback_buy_now(cq: CallbackQuery):
     await cq.answer()
-    _, country_name = cq.data.split(":",1)
+    _, country_name = cq.data.split(":", 1)
     country = countries_col.find_one({"name": country_name})
     if not country:
         return await cq.answer("❌ Country not found", show_alert=True)
@@ -148,11 +148,12 @@ async def callback_buy_now(cq: CallbackQuery):
     if user["balance"] < country["price"]:
         return await cq.answer("⚠️ Insufficient balance", show_alert=True)
 
+    # Fetch available number with string session
     number_doc = numbers_col.find_one({"country": country_name, "used": False})
     if not number_doc:
         return await cq.answer("❌ No available numbers", show_alert=True)
 
-    # Deduct & mark used
+    # Deduct balance and mark number as sold
     users_col.update_one({"_id": user["_id"]}, {"$inc": {"balance": -country["price"]}})
     numbers_col.update_one({"_id": number_doc["_id"]}, {"$set": {"used": True}})
     countries_col.update_one({"name": country_name}, {"$inc": {"stock": -1}})
@@ -165,41 +166,69 @@ async def callback_buy_now(cq: CallbackQuery):
         "created_at": datetime.datetime.utcnow()
     })
 
+    # Edit message to show purchased number and OTP button
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton("🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}"))
+    kb.row(
+        InlineKeyboardButton(text="🔑 Get OTP", callback_data=f"grab_otp:{number_doc['_id']}")
+    )
     await cq.message.edit_text(
-        f"✅ Purchase Successful!\n🌍 {country_name}\n📱 {number_doc['number']}\n💸 {country['price']}\n💰 Balance Left: {user['balance'] - country['price']:.2f}\n\n👉 Click below to get OTP.",
+        f"✅ Purchase Successful!\n"
+        f"🌍 {country_name}\n"
+        f"📱 {number_doc['number']}\n"
+        f"💸 {country['price']}\n"
+        f"💰 Balance Left: {user['balance'] - country['price']:.2f}\n\n"
+        f"👉 Click below to get OTP.",
         reply_markup=kb.as_markup()
     )
 
+# ===== GRAB OTP USING STRING SESSION =====
 @dp.callback_query(F.data.startswith("grab_otp:"))
 async def callback_grab_otp(cq: CallbackQuery):
     await cq.answer()
-    _, number_id = cq.data.split(":",1)
+    _, number_id = cq.data.split(":", 1)
     number_doc = numbers_col.find_one({"_id": ObjectId(number_id)})
     if not number_doc:
         return await cq.answer("❌ Number not found", show_alert=True)
+
     string_session = number_doc.get("string_session")
+    if not string_session:
+        return await cq.answer("❌ String session missing", show_alert=True)
+
     api_id = int(os.getenv("API_ID"))
     api_hash = os.getenv("API_HASH")
-    if not string_session:
-        return await cq.answer("❌ No string session found", show_alert=True)
     client = TelegramClient(StringSession(string_session), api_id, api_hash)
+
     await client.connect()
+    otp_code = None
     try:
-        code = ""
-        async for msg in client.iter_messages("777000", limit=5):
+        async for msg in client.iter_messages("777000", limit=10):
             if msg.message and msg.message.isdigit():
-                code = msg.message
+                otp_code = msg.message
                 break
-        if not code:
-            await cq.answer("⚠️ No OTP yet. Try again later.", show_alert=True)
-        else:
-            await cq.message.answer(f"🔑 OTP for {number_doc['number']}:\n<code>{code}</code>", parse_mode="HTML")
-    except SessionPasswordNeededError:
-        await cq.message.answer("🔐 2FA enabled. Use password manually.")
+
+        if not otp_code:
+            return await cq.answer("⚠️ No OTP yet. Try again later.", show_alert=True)
+
+        # Send OTP and mark purchase complete
+        await cq.message.edit_text(
+            f"✅ OTP Received!\n"
+            f"📱 {number_doc['number']}\n"
+            f"🔑 OTP: <code>{otp_code}</code>",
+            parse_mode="HTML"
+        )
+
+        # Notify channel
+        await bot.send_message(
+            "@thedrxnet",
+            f"📦 Purchase Complete!\n"
+            f"👤 User: {cq.from_user.full_name} (@{cq.from_user.username})\n"
+            f"🌍 Country: {number_doc['country']}\n"
+            f"📱 Number: {number_doc['number']}\n"
+            f"💸 Price: ₹{number_doc.get('price', 'N/A')}"
+        )
+
     except Exception as e:
-        await cq.message.answer(f"❌ Failed to grab OTP: {e}")
+        await cq.message.edit_text(f"❌ Failed to grab OTP: {e}")
     finally:
         await client.disconnect()
 

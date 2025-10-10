@@ -152,16 +152,15 @@ async def send_country_menu(message, previous=""):
         return await message.answer("❌ No countries available. Admin must add stock first.")
     
     kb = InlineKeyboardBuilder()
-    for c in countries:
-        kb.button(text=html.escape(c["name"]), callback_data=f"country:{c['name']}")
-    kb.adjust(2)
-    
-    if previous:
-        kb.row(InlineKeyboardButton(text="🔙 Back", callback_data=previous))
-    
-    # Send a new message instead of editing
-    await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
+for c in countries:
+    kb.button(text=html.escape(c["name"]), callback_data=f"country:{c['name']}")
+kb.adjust(2)
 
+if previous:
+    kb.row(InlineKeyboardButton(text="🔙 Back", callback_data=previous))
+
+# Edit the same message instead of sending a new one
+await message.edit_text("🌍 Select a country:", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):

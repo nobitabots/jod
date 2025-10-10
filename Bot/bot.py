@@ -94,13 +94,19 @@ async def otp_listener(number_doc, user_id):
 async def cmd_start(m: Message):
     if not await check_join(bot, m):
         return
+
+    # Ensure user exists in DB
     get_or_create_user(m.from_user.id, m.from_user.username)
-    text = (
+
+    # Caption text
+    caption = (
         "<b>Welcome to Bot – ⚡ Fastest Telegram OTP Bot!</b>\n"
         "<i>📖 How to use Bot:</i>\n"
         "1️⃣ Recharge\n2️⃣ Select Country\n3️⃣ Buy Account and 📩 Receive OTP\n"
         "🚀 Enjoy Fast OTP Services!"
     )
+
+    # Inline keyboard
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
@@ -114,8 +120,19 @@ async def cmd_start(m: Message):
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
         InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto")
     )
-    menu_msg = await m.answer("Loading menu...", reply_markup=None)
-    await menu_msg.edit_text(text, reply_markup=kb.as_markup())
+
+    # Step 1: Send the 🥂 emoji first
+    menu_msg = await m.answer("🥂")
+
+    # Step 2: Edit the same message into a video with caption
+    await menu_msg.edit_media(
+        media=InputMediaVideo(
+            media="https://files.catbox.moe/n156be.mp4",
+            caption=caption,
+            parse_mode="HTML"
+        ),
+        reply_markup=kb.as_markup()
+    )
 
 # ================= Balance =================
 @dp.callback_query(F.data=="balance")

@@ -807,7 +807,7 @@ async def handle_broadcast(msg: Message, state: FSMContext):
     for user in users:
         user_id = user["_id"]
         try:
-            await bot.send_message(user_id, f"📢 Broadcast from Admin:\n\n{text_to_send}", parse_mode="HTML")
+            await bot.send_message(user_id, f"📢 Admin Message\n\n<blockquote>{text_to_send}</blockquote>", parse_mode="HTML")
             sent_count += 1
         except Exception as e:
             failed_count += 1

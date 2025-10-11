@@ -779,7 +779,7 @@ async def handle_user_redeem(msg: Message, state: FSMContext):
     await state.clear()
         
 
-# ================= Admin Broadcast (Forward Version) =================
+# ================= Admin Broadcast (Forward Version - Aiogram Fix) =================
 @dp.message(Command("broadcast"))
 async def cmd_broadcast(msg: Message):
     if not is_admin(msg.from_user.id):
@@ -793,7 +793,6 @@ async def cmd_broadcast(msg: Message):
 
     if not users:
         return await msg.answer("⚠️ No users found to broadcast.")
-        return
 
     sent_count = 0
     failed_count = 0
@@ -801,7 +800,11 @@ async def cmd_broadcast(msg: Message):
     for user in users:
         user_id = user["_id"]
         try:
-            await broadcast_msg.forward_to(user_id)
+            await bot.forward_message(
+                chat_id=user_id,
+                from_chat_id=broadcast_msg.chat.id,
+                message_id=broadcast_msg.message_id
+            )
             sent_count += 1
         except Exception as e:
             failed_count += 1

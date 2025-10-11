@@ -466,23 +466,32 @@ async def handle_add_country(msg: Message, state: FSMContext):
     await msg.answer(f"✅ Country {name.strip()} added/updated with price {price}.")
     await state.clear()
 
+# ================= Admin: Remove Country =================
 @dp.message(Command("removecountry"))
-async def cmd_remove_country(msg: Message, state: FSMContext):
+async def cmd_remove_country(msg: Message):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
-    await msg.answer("🌍 Send the country name to remove:")
-    await state.set_state("removing_country")
 
-@dp.message(StateFilter("removing_country"))
-async def handle_remove_country(msg: Message, state: FSMContext):
-    if not is_admin(msg.from_user.id):
-        return
-    result = countries_col.delete_one({"name": msg.text.strip()})
+    countries = list(countries_col.find({}))
+    if not countries:
+        return await msg.answer("📭 No countries to remove.")
+
+    kb = InlineKeyboardBuilder()
+    for c in countries:
+        kb.button(text=c["name"], callback_data=f"removecountry:{c['name']}")
+    kb.adjust(2)
+    await msg.answer("🌍 Select a country to remove:", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data.startswith("removecountry:"))
+async def callback_remove_country(cq: CallbackQuery):
+    await cq.answer()
+    _, country_name = cq.data.split(":", 1)
+
+    result = countries_col.delete_one({"name": country_name})
     if result.deleted_count == 0:
-        await msg.answer(f"❌ Country {msg.text.strip()} not found.")
+        await cq.message.edit_text(f"❌ Country <b>{country_name}</b> not found.", parse_mode="HTML")
     else:
-        await msg.answer(f"✅ Country {msg.text.strip()} removed.")
-    await state.clear()
+        await cq.message.edit_text(f"✅ Country <b>{country_name}</b> removed successfully.", parse_mode="HTML")
 
 @dp.message(Command("db"))
 async def cmd_db(msg: Message):
@@ -507,6 +516,98 @@ async def cmd_db(msg: Message):
         text += "\n"
 
     await msg.answer(text, parse_mode="HTML")
+
+
+
+# ================= Admin: Edit Country =================
+class EditCountry(StatesGroup):
+    waiting_new_name = State()
+    waiting_new_price = State()
+
+@dp.message(Command("editcountry"))
+async def cmd_edit_country(msg: Message, state: FSMContext):
+    if not is_admin(msg.from_user.id):
+        return await msg.answer("❌ Not authorized.")
+    countries = list(countries_col.find({}))
+    if not countries:
+        return await msg.answer("📭 No countries to edit.")
+    kb = InlineKeyboardBuilder()
+    for c in countries:
+        kb.button(text=c["name"], callback_data=f"editcountry:{c['name']}")
+    kb.adjust(2)
+    await msg.answer("🌍 Select a country to edit:", reply_markup=kb.as_markup())
+
+@dp.callback_query(F.data.startswith("editcountry:"))
+async def callback_edit_country(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()
+    _, country_name = cq.data.split(":", 1)
+    country = countries_col.find_one({"name": country_name})
+    if not country:
+        return await cq.message.edit_text(f"❌ Country {country_name} not found.")
+
+    await state.update_data(country_name=country_name)
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="✏️ Change Name", callback_data="editcountry_change_name"),
+        InlineKeyboardButton(text="💰 Change Price", callback_data="editcountry_change_price")
+    )
+    kb.row(InlineKeyboardButton(text="❌ Cancel", callback_data="editcountry_cancel"))
+    await cq.message.edit_text(
+        f"🛠️ Editing Country: <b>{country_name}</b>\n"
+        f"💸 Current Price: ₹{country['price']}",
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+
+@dp.callback_query(F.data == "editcountry_change_name")
+async def callback_edit_change_name(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()
+    data = await state.get_data()
+    country_name = data.get("country_name")
+    await cq.message.answer(f"✏️ Send new name for <b>{country_name}</b>:", parse_mode="HTML")
+    await state.set_state(EditCountry.waiting_new_name)
+
+@dp.message(StateFilter(EditCountry.waiting_new_name))
+async def handle_new_country_name(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    old_name = data.get("country_name")
+    new_name = msg.text.strip()
+
+    countries_col.update_one({"name": old_name}, {"$set": {"name": new_name}})
+    numbers_col.update_many({"country": old_name}, {"$set": {"country": new_name}})
+    await msg.answer(f"✅ Country name changed from <b>{old_name}</b> → <b>{new_name}</b>", parse_mode="HTML")
+    await state.clear()
+
+@dp.callback_query(F.data == "editcountry_change_price")
+async def callback_edit_change_price(cq: CallbackQuery, state: FSMContext):
+    await cq.answer()
+    data = await state.get_data()
+    country_name = data.get("country_name")
+    await cq.message.answer(f"💰 Send new price for <b>{country_name}</b>:", parse_mode="HTML")
+    await state.set_state(EditCountry.waiting_new_price)
+
+@dp.message(StateFilter(EditCountry.waiting_new_price))
+async def handle_new_country_price(msg: Message, state: FSMContext):
+    data = await state.get_data()
+    country_name = data.get("country_name")
+    try:
+        price = float(msg.text.strip())
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        return await msg.answer("❌ Invalid price format. Please send a valid number.")
+
+    countries_col.update_one({"name": country_name}, {"$set": {"price": price}})
+    await msg.answer(f"✅ Updated price for <b>{country_name}</b> to ₹{price:.2f}", parse_mode="HTML")
+    await state.clear()
+
+@dp.callback_query(F.data == "editcountry_cancel")
+async def callback_edit_cancel(cq: CallbackQuery, state: FSMContext):
+    await cq.answer("❌ Cancelled")
+    await state.clear()
+    await cq.message.edit_text("❌ Edit cancelled.")
+
 
 @dp.callback_query(F.data == "stats")
 async def callback_stats(cq: CallbackQuery):

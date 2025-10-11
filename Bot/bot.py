@@ -920,7 +920,6 @@ async def cmd_broadcast(msg: Message):
     
 
 # ===== Register External Handlers =====
-register_readymade_accounts_handlers(dp=dp, bot=bot, users_col=users_col)
 register_recharge_handlers(dp=dp, bot=bot, users_col=users_col, txns_col=db["transactions"], ADMIN_IDS=ADMIN_IDS)
 
 # ===== Bot Runner =====

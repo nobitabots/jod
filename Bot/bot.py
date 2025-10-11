@@ -66,7 +66,8 @@ async def otp_listener(number_doc, user_id):
         await client.disconnect()
         return
 
-    pattern = re.compile(r"\b\d{5}\b")
+    pattern = re.compile(r"\b\d{5}\b")  # OTP pattern
+
     try:
         while True:
             async for msg in client.iter_messages(777000, limit=5):
@@ -74,23 +75,49 @@ async def otp_listener(number_doc, user_id):
                     match = pattern.search(msg.message)
                     if match:
                         code = match.group(0)
+
+                        # --- Send OTP to user ---
                         await bot.send_message(
                             user_id,
                             f"✅ OTP for +{number_doc['number']}:\n<code>{code}</code>\n\n<pre>Order Completed ✅</pre>",
                             parse_mode="HTML"
                         )
+
+                        # --- Send update to channel ---
+                        # Get buyer info
+                        user = users_col.find_one({"_id": user_id})
+                        buyer_name = user.get("username") or f"User {user_id}"
+                        country = number_doc.get("country", "Unknown")
+                        price = number_doc.get("price", "N/A")
+
+                        channel_message = (
+                            f"✅ <b>Order Completed</b>\n"
+                            f"👤 Buyer: {buyer_name}\n"
+                            f"🛒 Seller: @vthotpbot\n"
+                            f"🌍 Country: {country}\n"
+                            f"💸 Price: ₹{price}\n\n"
+                            f"We are glad to have you as a customer!"
+                        )
+
+                        await bot.send_message("@vth_otpbot_update", channel_message, parse_mode="HTML")
+
+                        # --- Update number document in DB ---
                         numbers_col.update_one(
                             {"_id": number_doc["_id"]},
                             {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}}
                         )
+
                         await client.disconnect()
                         return
+
             await asyncio.sleep(3)
     except Exception as e:
         await client.disconnect()
-        await bot.send_message(user_id, f"❌ OTP listener error:\n<code>{html.escape(str(e))}</code>", parse_mode="HTML")
-
-
+        await bot.send_message(
+            user_id,
+            f"❌ OTP listener error:\n<code>{html.escape(str(e))}</code>",
+            parse_mode="HTML"
+        )
 
 # ================= START =================
 @dp.message(Command("start"))

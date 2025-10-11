@@ -1,221 +1,137 @@
+import datetime, random, string, html
 from aiogram import F
-from aiogram.types import Message, CallbackQuery
-from aiogram.filters import Command
+from aiogram.types import Message
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-import random
-import string
-import datetime
-import traceback
+from aiogram.fsm.state import StatesGroup, State
 
-# -------------------------------
-# Helpers
-# -------------------------------
+
+# ================= FSM =================
+class RedeemState(StatesGroup):
+    waiting_code = State()
+    waiting_value = State()
+    waiting_limit = State()
+
+
+# ================= Helper =================
 def generate_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-def now_utc():
-    return datetime.datetime.utcnow()
 
-# -------------------------------
-# Register function
-# -------------------------------
+# ================= Main Register =================
 def register_redeem_handlers(dp, bot, db, ADMIN_IDS):
     users_col = db["users"]
     redeem_col = db["redeem_codes"]
 
-    # safe callback answer helper
-    async def safe_cq_answer(cq: CallbackQuery, text: str = "", show_alert: bool = False):
-        try:
-            await cq.answer(text, show_alert=show_alert)
-        except Exception:
-            # ignore if query is too old / invalid
-            pass
+    # ================= User Redeem =================
+    @dp.message(Command("redeem"))
+    async def start_redeem(msg: Message, state: FSMContext):
+        await msg.answer("🎟️ Send your redeem code:")
+        await state.set_state(RedeemState.waiting_code)
 
-    # -------------------------------
-    # User presses Redeem button (callback query)
-    # -------------------------------
-    @dp.callback_query(F.data == "redeem")
-    async def callback_redeem(cq: CallbackQuery, state: FSMContext):
-        try:
-            await safe_cq_answer(cq, "✅ Send your redeem code now!", show_alert=False)
-            user_id = cq.from_user.id
-            now = now_utc()
-            # ensure user record exists and set pending_redeem flag
-            users_col.update_one(
-                {"_id": user_id},
-                {
-                    "$setOnInsert": {"username": cq.from_user.username or None, "balance": 0.0},
-                    "$set": {"pending_redeem": True, "pending_redeem_at": now}
-                },
-                upsert=True
-            )
-            await cq.message.answer("🎟️ Send your redeem code below (you have 5 minutes):")
-        except Exception as e:
-            print("REDEEM-DEBUG callback_redeem error:", e)
-            traceback.print_exc()
+    @dp.message(StateFilter(RedeemState.waiting_code))
+    async def handle_redeem_code(msg: Message, state: FSMContext):
+        code = msg.text.strip().upper()
+        redeem = redeem_col.find_one({"code": code})
 
-    # -------------------------------
-    # Catch text messages for redeem if the user has a pending_redeem flag and no active FSM
-    # -------------------------------
-    @dp.message(F.text & ~F.text.startswith("/"))
-    async def handle_text_for_redeem(msg: Message, state: FSMContext):
-        try:
-            user_id = msg.from_user.id
+        if not redeem:
+            await state.clear()
+            return await msg.answer("❌ Invalid or expired redeem code.")
 
-            # if user is currently in another FSM state, ignore (other handlers will handle)
-            current_state = await state.get_state()
-            if current_state:
-                return
+        if redeem["claimed_count"] >= redeem["max_claims"]:
+            await state.clear()
+            return await msg.answer("🚫 This code has reached its claim limit.")
 
-            user_doc = users_col.find_one({"_id": user_id})
-            if not user_doc:
-                return  # no user record, nothing to do
+        user = users_col.find_one({"_id": msg.from_user.id})
+        if not user:
+            await state.clear()
+            return await msg.answer("⚠️ Please use /start first.")
 
-            if not user_doc.get("pending_redeem"):
-                return  # user didn't press Redeem — ignore
+        if msg.from_user.id in redeem.get("claimed_users", []):
+            await state.clear()
+            return await msg.answer("⚠️ You have already claimed this code.")
 
-            # check expiry (5 minutes)
-            pending_at = user_doc.get("pending_redeem_at")
-            if not pending_at:
-                # cleanup just in case
-                users_col.update_one({"_id": user_id}, {"$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-                return
+        # Credit balance
+        users_col.update_one({"_id": msg.from_user.id}, {"$inc": {"balance": redeem["amount"]}})
+        redeem_col.update_one(
+            {"code": code},
+            {"$inc": {"claimed_count": 1}, "$push": {"claimed_users": msg.from_user.id}}
+        )
 
-            elapsed = (now_utc() - pending_at).total_seconds()
-            if elapsed > 300:
-                users_col.update_one({"_id": user_id}, {"$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-                await msg.answer("⏳ Your redeem session expired. Please press the Redeem button again.")
-                return
+        await msg.answer(
+            f"✅ Code <b>{html.escape(code)}</b> redeemed successfully!\n"
+            f"💰 You received ₹{redeem['amount']:.2f}",
+            parse_mode="HTML"
+        )
+        await state.clear()
 
-            code = msg.text.strip().upper()
-
-            # find redeem doc
-            redeem = redeem_col.find_one({"code": code})
-            if not redeem:
-                # invalid code — clear pending to avoid spam, require user to press Redeem again
-                users_col.update_one({"_id": user_id}, {"$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-                await msg.answer("❌ Invalid or expired redeem code.")
-                return
-
-            # atomic update: only increase if not already claimed by this user and not exceeded max_claims
-            update_filter = {
-                "code": code,
-                "claimed_count": {"$lt": redeem["max_claims"]},
-                "claimed_users": {"$ne": user_id}
-            }
-            update_op = {"$inc": {"claimed_count": 1}, "$push": {"claimed_users": user_id}}
-            res = redeem_col.update_one(update_filter, update_op)
-
-            if res.modified_count == 0:
-                # either already claimed by this user or limit reached
-                # check which
-                if user_id in redeem.get("claimed_users", []):
-                    await msg.answer("⚠️ You have already claimed this code.")
-                else:
-                    await msg.answer("🚫 This code has reached its claim limit.")
-                users_col.update_one({"_id": user_id}, {"$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-                return
-
-            # credit the user's balance
-            users_col.update_one({"_id": user_id}, {"$inc": {"balance": redeem["amount"]}, "$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-
-            # fetch new balance (best-effort)
-            user_after = users_col.find_one({"_id": user_id}) or {}
-            new_balance = user_after.get("balance", 0.0)
-
-            await msg.answer(
-                f"✅ Code <b>{code}</b> redeemed successfully!\n💰 You received ₹{redeem['amount']:.2f}\n💰 New Balance: ₹{new_balance:.2f}",
-                parse_mode="HTML"
-            )
-            print(f"REDEEM-DEBUG: user {user_id} redeemed {code} for ₹{redeem['amount']}")
-        except Exception as e:
-            print("REDEEM-DEBUG handle_text_for_redeem error:", e)
-            traceback.print_exc()
-            # try to cleanup pending flag to avoid stuck sessions
-            try:
-                users_col.update_one({"_id": msg.from_user.id}, {"$unset": {"pending_redeem": "", "pending_redeem_at": ""}})
-            except Exception:
-                pass
-
-    # -------------------------------
-    # Admin: Create redeem via single command with args:
-    # Usage: /createredeem 50,10   <-- amount, max_claims
-    # -------------------------------
+    # ================= Admin Create Redeem =================
     @dp.message(Command("createredeem"))
-    async def cmd_create_redeem(msg: Message):
+    async def cmd_create_redeem(msg: Message, state: FSMContext):
+        if msg.from_user.id not in ADMIN_IDS:
+            return await msg.answer("❌ Not authorized.")
+        await msg.answer("💰 Enter the amount for this redeem code:")
+        await state.set_state(RedeemState.waiting_value)
+
+    @dp.message(StateFilter(RedeemState.waiting_value))
+    async def handle_redeem_amount(msg: Message, state: FSMContext):
         try:
-            if msg.from_user.id not in ADMIN_IDS:
-                return await msg.answer("❌ Not authorized.")
+            amount = float(msg.text.strip())
+            if amount <= 0:
+                raise ValueError
+        except ValueError:
+            return await msg.answer("❌ Invalid amount. Send a number like 50 or 100.")
 
-            # parse inline args
-            text = (msg.text or "").strip()
-            parts = text.split(None, 1)
-            if len(parts) < 2:
-                return await msg.answer("Usage: /createredeem <amount>,<max_claims>\nExample: /createredeem 50,10")
+        await state.update_data(amount=amount)
+        await msg.answer("👥 Enter max number of users who can claim this code:")
+        await state.set_state(RedeemState.waiting_limit)
 
-            args = parts[1].strip()
-            if "," not in args:
-                return await msg.answer("Invalid format. Example: /createredeem 50,10")
+    @dp.message(StateFilter(RedeemState.waiting_limit))
+    async def handle_redeem_limit(msg: Message, state: FSMContext):
+        try:
+            limit = int(msg.text.strip())
+            if limit <= 0:
+                raise ValueError
+        except ValueError:
+            return await msg.answer("❌ Invalid number. Send a positive integer.")
 
-            amount_str, limit_str = map(str.strip, args.split(",", 1))
-            try:
-                amount = float(amount_str)
-                limit = int(limit_str)
-                if amount <= 0 or limit <= 0:
-                    raise ValueError
-            except ValueError:
-                return await msg.answer("Invalid numbers. Example: /createredeem 50,10")
+        data = await state.get_data()
+        amount = data["amount"]
+        code = generate_code()
 
-            # generate unique code (avoid rare collision)
-            for _ in range(10):
-                code = generate_code(6)
-                if not redeem_col.find_one({"code": code}):
-                    break
-            else:
-                return await msg.answer("❌ Failed to generate unique code. Try again.")
+        redeem_col.insert_one({
+            "code": code,
+            "amount": amount,
+            "max_claims": limit,
+            "claimed_count": 0,
+            "claimed_users": [],
+            "created_at": datetime.datetime.utcnow()
+        })
 
-            redeem_doc = {
-                "code": code,
-                "amount": amount,
-                "max_claims": limit,
-                "claimed_count": 0,
-                "claimed_users": [],
-                "created_at": now_utc()
-            }
-            redeem_col.insert_one(redeem_doc)
+        await msg.answer(
+            f"✅ Redeem code created!\n\n"
+            f"🎟️ Code: <code>{html.escape(code)}</code>\n"
+            f"💰 Amount: ₹{amount:.2f}\n"
+            f"👥 Max Claims: {limit}",
+            parse_mode="HTML"
+        )
+        await state.clear()
 
-            await msg.answer(
-                f"✅ Redeem code created!\n\n🎟️ Code: <code>{code}</code>\n💰 Amount: ₹{amount:.2f}\n👥 Max Claims: {limit}",
-                parse_mode="HTML"
-            )
-            print(f"REDEEM-DEBUG: admin {msg.from_user.id} created code {code} amount={amount} max={limit}")
-        except Exception as e:
-            print("REDEEM-DEBUG cmd_create_redeem error:", e)
-            traceback.print_exc()
-            await msg.answer("❌ Error creating redeem code.")
-
-    # -------------------------------
-    # Admin: list redeem codes
-    # -------------------------------
+    # ================= Admin View Redeems =================
     @dp.message(Command("redeemlist"))
     async def cmd_redeem_list(msg: Message):
-        try:
-            if msg.from_user.id not in ADMIN_IDS:
-                return await msg.answer("❌ Not authorized.")
+        if msg.from_user.id not in ADMIN_IDS:
+            return await msg.answer("❌ Not authorized.")
 
-            redeems = list(redeem_col.find().sort("created_at", -1))
-            if not redeems:
-                return await msg.answer("📭 No redeem codes found.")
+        redeems = list(redeem_col.find())
+        if not redeems:
+            return await msg.answer("📭 No redeem codes found.")
 
-            text = "🎟️ <b>Redeem Codes:</b>\n\n"
-            for r in redeems:
-                text += (
-                    f"Code: <code>{r['code']}</code>\n"
-                    f"💰 Amount: ₹{r['amount']}\n"
-                    f"👥 {r.get('claimed_count',0)} / {r.get('max_claims',0)} claimed\n\n"
-                )
-            await msg.answer(text, parse_mode="HTML")
-        except Exception as e:
-            print("REDEEM-DEBUG cmd_redeem_list error:", e)
-            traceback.print_exc()
-            await msg.answer("❌ Error fetching list.")
+        text = "🎟️ <b>Active Redeem Codes:</b>\n\n"
+        for r in redeems:
+            text += (
+                f"Code: <code>{html.escape(r['code'])}</code>\n"
+                f"💰 Amount: ₹{r['amount']}\n"
+                f"👥 {r['claimed_count']} / {r['max_claims']} claimed\n\n"
+            )
+        await msg.answer(text, parse_mode="HTML")

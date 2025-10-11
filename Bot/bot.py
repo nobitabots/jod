@@ -16,7 +16,6 @@ from telethon.sessions import StringSession
 import re
 from aiogram.types import InputMediaVideo
 from recharge_flow import register_recharge_handlers
-from readymade_accounts import register_readymade_accounts_handlers
 from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS
 
@@ -51,7 +50,7 @@ def get_or_create_user(user_id: int, username: str | None):
 def is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
-# ================= Automatic OTP Listener =================
+# ================ Automatic OTP Listener =================
 async def otp_listener(number_doc, user_id):
     string_session = number_doc.get("string_session")
     if not string_session:

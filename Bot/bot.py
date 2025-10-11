@@ -743,6 +743,13 @@ async def callback_user_redeem(cq: CallbackQuery, state: FSMContext):
     await cq.message.answer("🎟️ Send your redeem code below:")
     await state.set_state(UserRedeemState.waiting_code)
 
+# Command /redeem
+@dp.message(F.text == "/redeem")
+async def command_user_redeem(message: Message, state: FSMContext):
+    await message.answer("✅ Send your redeem code now!")
+    await message.answer("🎟️ Send your redeem code below:")
+    await state.set_state(UserRedeemState.waiting_code)
+
 @dp.message(StateFilter(UserRedeemState.waiting_code))
 async def handle_user_redeem(msg: Message, state: FSMContext):
     code = msg.text.strip().upper()

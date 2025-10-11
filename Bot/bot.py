@@ -90,11 +90,13 @@ async def otp_listener(number_doc, user_id):
                         price = number_doc.get("price", "N/A")
 
                         channel_message = (
-                            f"<pre>✅ <b>Order Completed</b></pre>\n\n"
-                            f"👤 Buyer: @{buyer_name}\n"
-                            f"🛒 Seller: @TG_ACC_STORE_BOT\n"
-                            f"🌍 Country: {country}\n\n"
-                            f"We are glad to have you as a customer!"
+                            f"<pre>✅ <b>𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖯𝗎𝗋𝖼𝗁𝖺𝗌𝖾 𝖲𝗎𝖼𝖼𝖾𝗌𝗌𝖿𝗎𝗅</b></pre>\n\n"
+                            f"• For country :- {country}\n"
+                            f"<b>• Application Type :- Telegram </b>\n\n"
+                            f"<b>• Number :- h̶i̶d̶d̶e̶n̶•••• 📞</b>\n"
+                            f"<b>• Price :- ₹{price}</b>\n\n"
+                            f"We are glad to have you as a customer!\n"
+                            f"<b>• @TG_ACC_STORE_BOT</b>"
                         )
 
                         await bot.send_message("@TG_ACC_ST0RE", channel_message, parse_mode="HTML")

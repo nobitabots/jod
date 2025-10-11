@@ -779,7 +779,42 @@ async def handle_user_redeem(msg: Message, state: FSMContext):
     await state.clear()
         
 
+# ================= Admin Broadcast =================
+@dp.message(Command("broadcast"))
+async def cmd_broadcast(msg: Message, state: FSMContext):
+    if not is_admin(msg.from_user.id):
+        return await msg.answer("❌ Not authorized.")
+    
+    await msg.answer("📢 Send the message you want to broadcast to all users:")
+    await state.set_state("broadcast_waiting")
 
+@dp.message(StateFilter("broadcast_waiting"))
+async def handle_broadcast(msg: Message, state: FSMContext):
+    if not is_admin(msg.from_user.id):
+        return await state.clear()
+
+    text_to_send = msg.text
+    users = list(users_col.find({}))
+
+    if not users:
+        await msg.answer("⚠️ No users found to broadcast.")
+        await state.clear()
+        return
+
+    sent_count = 0
+    failed_count = 0
+
+    for user in users:
+        user_id = user["_id"]
+        try:
+            await bot.send_message(user_id, f"📢 Broadcast from Admin:\n\n{text_to_send}", parse_mode="HTML")
+            sent_count += 1
+        except Exception as e:
+            failed_count += 1
+            print(f"Failed to send to {user_id}: {e}")
+    
+    await msg.answer(f"✅ Broadcast completed!\n\nSent: {sent_count}\nFailed: {failed_count}")
+    await state.clear()
     
 
 # ===== Register External Handlers =====

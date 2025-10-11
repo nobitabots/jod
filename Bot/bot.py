@@ -580,8 +580,11 @@ async def handle_debit(msg: Message, state: FSMContext):
 
 
 
-# ================= Redeem FSM ================
 
+    # ================= MongoDB Redeem Collection =================
+redeem_col = db["redeem_codes"]  # Add this at top with other collections
+
+# ================= Redeem FSM =================
 class RedeemState(StatesGroup):
     waiting_amount = State()  # Admin enters amount
     waiting_limit = State()   # Admin selects max users via inline numeric keypad
@@ -589,10 +592,10 @@ class RedeemState(StatesGroup):
 class UserRedeemState(StatesGroup):
     waiting_code = State()    # User enters redeem code
 
-# ================= Helpers =================
+# ================= Helper =================
 import random, string
-
-def generate_code(length=6):
+def generate_code(length=8):
+    """Generate code like HEIKE938"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 # ================= Admin: Create Redeem =================
@@ -611,15 +614,14 @@ async def handle_redeem_amount(msg: Message, state: FSMContext):
             raise ValueError
     except ValueError:
         return await msg.answer("❌ Invalid amount. Send a number like 50 or 100.")
-    
-    await state.update_data(amount=amount)
-    await state.update_data(limit_str="")  # start with empty numeric string
 
-    # Send inline numeric keypad
+    await state.update_data(amount=amount, limit_str="")  # Initialize numeric string
+
+    # Numeric keypad
     kb = InlineKeyboardBuilder()
     for row in (("1","2","3"), ("4","5","6"), ("7","8","9"), ("0","❌","✅")):
         kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"redeemnum:{btn}") for btn in row])
-    
+
     await msg.answer(
         "👥 Select max number of users who can claim this code:\n<b>0</b>",
         parse_mode="HTML",
@@ -670,18 +672,17 @@ async def handle_redeem_number(cq: CallbackQuery, state: FSMContext):
         await state.clear()
         return
     else:
-        # Append number
         current += value
-        if len(current) > 6:  # max 6 digits
+        if len(current) > 6:
             current = current[:6]
 
     await state.update_data(limit_str=current)
 
-    # Update inline keypad display
+    # Rebuild keypad every callback to prevent freezing
     kb = InlineKeyboardBuilder()
     for row in (("1","2","3"), ("4","5","6"), ("7","8","9"), ("0","❌","✅")):
         kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"redeemnum:{btn}") for btn in row])
-    
+
     await cq.message.edit_text(
         f"👥 Select max number of users who can claim this code:\n<b>{current or '0'}</b>",
         parse_mode="HTML",
@@ -749,7 +750,6 @@ async def handle_user_redeem(msg: Message, state: FSMContext):
         parse_mode="HTML"
     )
     await state.clear()
-
         
 
 

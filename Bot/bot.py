@@ -21,7 +21,7 @@ from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS
 
 # ================= MongoDB Setup =================
-MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Venesa:Venesa000@venesa.ag5zkoi.mongodb.net/?retryWrites=true&w=majority&appName=Venesa"
+MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Hkbots:Hk2558@hkbots.wqsuua0.mongodb.net/?retryWrites=true&w=majority&appName=HKBOTS"
 client = MongoClient(MONGO_URI)
 db = client["QuickCodes"]
 users_col = db["users"]
@@ -93,13 +93,12 @@ async def otp_listener(number_doc, user_id):
                         channel_message = (
                             f"<pre>✅ <b>Order Completed</b></pre>\n\n"
                             f"👤 Buyer: @{buyer_name}\n"
-                            f"🛒 Seller: @vthotpbot\n"
-                            f"🌍 Country: {country}\n"
-                            f"💸 Price: ₹{price}\n\n"
+                            f"🛒 Seller: @TG_ACC_STORE_BOT\n"
+                            f"🌍 Country: {country}\n\n"
                             f"We are glad to have you as a customer!"
                         )
 
-                        await bot.send_message("@vth_otpbot_update", channel_message, parse_mode="HTML")
+                        await bot.send_message("@TG_ACC_ST0RE", channel_message, parse_mode="HTML")
 
                         # --- Update number document in DB ---
                         numbers_col.update_one(
@@ -130,7 +129,7 @@ async def cmd_start(m: Message):
 
     # Caption for start menu
     caption = (
-        "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴠᴛʜ ᴀᴄᴄᴏᴜɴᴛ Bᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝗍 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
+        "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝗍 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
         "<blockquote expandable>- 𝖠𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼 𝖮𝖳𝖯𝗌 📌 \n"
         "- 𝖤𝖺𝗌𝗒 𝗍𝗈 𝖴𝗌𝖾 🥂\n"
         "- 24/7 𝖲𝗎𝗉𝗉𝗈𝗋𝗍 👨‍🔧\n"
@@ -147,7 +146,7 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/valriking")
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/Prabhatuzumaki")
     )
     kb.row(
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
@@ -164,7 +163,7 @@ async def cmd_start(m: Message):
     try:
         await menu_msg.edit_media(
             media=InputMediaVideo(
-                media="https://files.catbox.moe/n156be.mp4",
+                media="https://files.catbox.moe/277p2q.mp4",
                 caption=caption,
                 parse_mode="HTML"
             ),
@@ -200,7 +199,7 @@ async def send_country_menu(message, previous=""):
     kb.adjust(2)
 
     if previous:
-        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/valriking"))
+        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/Prabhatuzumaki"))
 
     # Send a new message for country selection (do not edit the start message)
     country_msg = await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
@@ -317,7 +316,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
     # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
         await msg.answer(
-            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> {num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @valriking</blockquote>"
+            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> {num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @Prabhatuzumaki</blockquote>"
         )
         # start OTP listener in background
         asyncio.create_task(otp_listener(num, msg.from_user.id))

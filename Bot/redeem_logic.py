@@ -1,9 +1,10 @@
 from aiogram import F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command, StateFilter
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 import random, string, datetime
+
 
 # ================= FSM =================
 class RedeemState(StatesGroup):
@@ -11,9 +12,11 @@ class RedeemState(StatesGroup):
     waiting_value = State()
     waiting_limit = State()
 
+
 # ================= Helpers =================
 def generate_code(length=6):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
 
 # ================= Register =================
 def register_redeem_handlers(dp, bot, db, ADMIN_IDS):
@@ -22,13 +25,14 @@ def register_redeem_handlers(dp, bot, db, ADMIN_IDS):
 
     # ================= User Redeem =================
     @dp.callback_query(F.data == "redeem")
-async def callback_redeem(cq: CallbackQuery, state: FSMContext):
-    try:
-        await cq.answer("✅ Send your redeem code now!", show_alert=False)
-    except:
-        pass
-    await cq.message.answer("🎟️ Send your redeem code below:")
-    await state.set_state(RedeemState.waiting_code)
+    async def callback_redeem(cq: CallbackQuery, state: FSMContext):
+        try:
+            await cq.answer("✅ Send your redeem code now!", show_alert=False)
+        except:
+            pass
+        await cq.message.answer("🎟️ Send your redeem code below:")
+        await state.set_state(RedeemState.waiting_code)
+
     @dp.message(RedeemState.waiting_code)
     async def handle_redeem_code(msg: Message, state: FSMContext):
         code = msg.text.strip().upper()
@@ -74,7 +78,7 @@ async def callback_redeem(cq: CallbackQuery, state: FSMContext):
         await state.clear()
 
     # ================= Admin Create Redeem =================
-    @dp.message(Command("/createredeem"))
+    @dp.message(Command("createredeem"))
     async def cmd_create_redeem(msg: Message, state: FSMContext):
         if msg.from_user.id not in ADMIN_IDS:
             return await msg.answer("❌ Not authorized.")
@@ -126,7 +130,7 @@ async def callback_redeem(cq: CallbackQuery, state: FSMContext):
         await state.clear()
 
     # ================= Admin View Redeems =================
-    @dp.message(Command("/redeemlist"))
+    @dp.message(Command("redeemlist"))
     async def cmd_redeem_list(msg: Message):
         if msg.from_user.id not in ADMIN_IDS:
             return await msg.answer("❌ Not authorized.")

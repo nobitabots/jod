@@ -154,7 +154,7 @@ async def cmd_start(m: Message):
         InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto")
     )
     kb.row(
-        InlineKeyboardButton(text="📤 Sell Account", callback_data="sell_account"),  # 👈 NEW BUTTON ADDED
+        InlineKeyboardButton(text="📤 Sell Account", callback_data="sell"),  # 👈 NEW BUTTON ADDED
         InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem")
     )
 

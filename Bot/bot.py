@@ -946,8 +946,7 @@ async def cmd_broadcast(msg: Message):
 
 # ===== Register External Handlers =====
 register_recharge_handlers(dp=dp, bot=bot, users_col=users_col, txns_col=db["transactions"], ADMIN_IDS=ADMIN_IDS)
-# inside main setup
-register_sell_handlers(dp, bot)
+await register_sell_handlers(dp, bot)
 
 # ===== Bot Runner =====
 async def main():

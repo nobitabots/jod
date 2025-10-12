@@ -11,7 +11,7 @@ SALES_FILE = os.path.join(BASE_DIR, "sales.json")
 PRICING_FILE = os.path.join(BASE_DIR, "pricing.json")
 
 # Admin IDs list - replace with your admins
-ADMIN_IDS = [111111111]
+ADMIN_IDS = [8488180191]
 
 # Simple in-memory state for demonstration; replace with FSM/store if you have one
 user_state = {}

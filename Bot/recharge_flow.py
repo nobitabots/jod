@@ -216,7 +216,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.update_data(screenshot=message.photo[-1].file_id)
 
         kb = InlineKeyboardBuilder()
-        for row in ["123", "456", "789", "0"]:
+        for row in ["123", "456", "789", "0."]:
             for ch in row:
                 kb.button(text=ch, callback_data=f"amount_{ch}")
             kb.adjust(len(row))

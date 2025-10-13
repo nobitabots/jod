@@ -112,10 +112,11 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
         kb = InlineKeyboardBuilder()
         kb.button(text="UPI", callback_data="upi_qr")
+        kb.button(text="Crypto", callback_data="crypto_pay")
         kb.button(text="Go Back", callback_data="go_back")
-        kb.adjust(2)
+        kb.adjust(2, 1)
 
-        text = "Select the UPI method below to deposit your funds.\n\n1 INR = 1 INR"
+        text = "Select your preferred payment method:\n\n1 INR = 1 INR\n1 USDT = ₹88"
 
         await bot.edit_message_text(
             text=text,
@@ -123,6 +124,49 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             message_id=msg_id,
             reply_markup=kb.as_markup()
         )
+        await cq.answer()
+
+    # ===== Crypto Payment Flow =====
+    @dp.callback_query(F.data == "crypto_pay", StateFilter(RechargeState.choose_method))
+    async def crypto_pay(cq: CallbackQuery, state: FSMContext):
+        data = await state.get_data()
+        msg_id = data.get("recharge_msg_id")
+
+        kb = InlineKeyboardBuilder()
+        kb.button(text="Submit Payment", callback_data="crypto_submit")
+        kb.button(text="Go Back", callback_data="deposit_now")
+        kb.adjust(2)
+
+        text = (
+            "🪙 <b>Make Payment via Crypto</b>\n\n"
+            "Send your payment to the USDT wallet addresses below:\n\n"
+            "📥 <b>TRC20 Address:</b>\n<code>TW4oPVrKNYsaht3MyHiDbxt9gDM9LbRUy6</code>\n\n"
+            "🌐 <b>BEP20 Address:</b>\n<code>0xdc714CDA825542C0c223a340d3D1e75BB93F6d7c</code>\n\n"
+            "💜 <b>POLYGON Address:</b>\n<code>0xdc714CDA825542C0c223a340d3D1e75BB93F6d7c</code>\n\n"
+            "💰 <b>Minimum Payment:</b> 0.01 USDT\n"
+            "💱 <b>Exchange Rate:</b> 1 USDT = ₹88\n\n"
+            "📸 After completing the payment, take a screenshot.\n\n"
+            "🔘 Tap <b>'Submit Payment'</b> below to continue."
+        )
+
+        await bot.edit_message_text(
+            text=text,
+            chat_id=cq.from_user.id,
+            message_id=msg_id,
+            parse_mode="HTML",
+            reply_markup=kb.as_markup()
+        )
+        await cq.answer()
+
+    @dp.callback_query(F.data == "crypto_submit", StateFilter(RechargeState.choose_method))
+    async def crypto_submit(cq: CallbackQuery, state: FSMContext):
+        try:
+            await cq.message.delete()
+        except:
+            pass
+        await cq.message.answer("📸 Please send a screenshot of your Crypto payment.")
+        await state.update_data(is_crypto=True)
+        await state.set_state(RechargeState.waiting_deposit_screenshot)
         await cq.answer()
 
     @dp.callback_query(F.data == "upi_qr", StateFilter(RechargeState.choose_method))
@@ -206,7 +250,9 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
                     "user_id": user.id,
                     "username": user.username,
                     "full_name": user.full_name,
-                    "amount": float(value),
+                    "is_crypto": data.get("is_crypto", False),
+                    "amount": float(value) * (88 if data.get("is_crypto") else 1),
+                    "original_amount": float(value),
                     "screenshot": screenshot,
                     "status": "pending",
                     "created_at": datetime.datetime.utcnow()

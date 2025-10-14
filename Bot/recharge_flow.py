@@ -319,10 +319,11 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         # Add balance to user
         user = users_col.find_one({"_id": txn["user_id"]})
         if user:
+            # Add credited amount to user balance
             new_balance = user.get("balance", 0.0) + txn["amount"]
             users_col.update_one({"_id": txn["user_id"]}, {"$set": {"balance": new_balance}})
 
-            # Send message to user that payment approved
+            # Notify the user
             try:
                 await bot.send_message(
                     chat_id=txn["user_id"],
@@ -331,6 +332,30 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             except Exception:
                 pass
 
+            # ========== Referral Bonus System ==========
+            referrer_id = user.get("referred_by")
+            if referrer_id:
+                try:
+                    reward = round(txn["amount"] * 0.02, 2)
+                    if reward > 0:
+                        users_col.update_one({"_id": referrer_id}, {"$inc": {"balance": reward}})
+
+                        # Notify referrer about bonus
+                        referrer = users_col.find_one({"_id": referrer_id})
+                        ref_username = referrer.get("username", "")
+                        try:
+                            await bot.send_message(
+                                chat_id=referrer_id,
+                                text=(
+                                    f"🎉 Your referred user "
+                                    f"@{user.get('username') or user.get('_id')} just recharged ₹{txn['amount']}.\n"
+                                    f"💰 You earned ₹{reward:.2f} (2%) added to your balance!"
+                                )
+                            )
+                        except Exception:
+                            pass
+                except Exception as e:
+                    print("Referral bonus error:", e)
         await cq.message.edit_caption(cq.message.caption + "\n✅ Approved and balance credited")
         await cq.answer("Transaction approved and balance updated!")
 

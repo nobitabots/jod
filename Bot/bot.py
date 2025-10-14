@@ -14,6 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from pymongo import MongoClient
 from telethon import TelegramClient
 from telethon.sessions import StringSession
+from aiogram.utils.deep_linking import create_start_link
 import re
 from aiogram.types import InputMediaVideo
 from recharge_flow import register_recharge_handlers
@@ -126,6 +127,29 @@ async def cmd_start(m: Message):
     if not await check_join(bot, m):
         return
 
+    args = m.text.split()
+    referred_by = None
+
+    # Check if user joined via referral link
+    if len(args) > 1 and args[1].startswith("ref"):
+        try:
+            referred_by = int(args[1][3:])
+        except:
+            referred_by = None
+
+    user = users_col.find_one({"_id": m.from_user.id})
+    if not user:
+        user_data = {
+            "_id": m.from_user.id,
+            "username": m.from_user.username or None,
+            "balance": 0.0,
+        }
+        if referred_by and referred_by != m.from_user.id:
+            user_data["referred_by"] = referred_by
+        users_col.insert_one(user_data)
+    else:
+        get_or_create_user(m.from_user.id, m.from_user.username)
+
     # Ensure user exists in DB
     get_or_create_user(m.from_user.id, m.from_user.username)
 
@@ -156,7 +180,8 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="📤 Sell Account", callback_data="sell"),  # 👈 NEW BUTTON ADDED
-        InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem")
+        InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem"),
+        InlineKeyboardButton(text="Earn", callback_data="refer"),  
     )
 
     # Step 1: Send 🥂 emoji first
@@ -640,6 +665,25 @@ async def callback_howto(cq: CallbackQuery):
     await cq.message.answer(steps_text)
     await cq.answer()
 
+@dp.callback_query(F.data == "refer")
+async def callback_refer(cq: CallbackQuery):
+    user = get_or_create_user(cq.from_user.id, cq.from_user.username)
+    # Create a referral link
+    bot_username = (await bot.get_me()).username
+    refer_link = f"https://t.me/{bot_username}?start=ref{cq.from_user.id}"
+
+    text = (
+        "🎁 <b>Refer & Earn Program</b>\n\n"
+        "Invite your friends to use the bot and earn <b>2%</b> of every recharge they make!\n\n"
+        f"🔗 <b>Your Referral Link:</b>\n<code>{refer_link}</code>\n\n"
+        "💡 Share your link and start earning passive income!"
+    )
+
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="📤 Share Link", url=f"https://t.me/share/url?url={refer_link}&text=Join%20and%20earn%20with%20this%20bot!"))
+
+    await cq.message.answer(text, parse_mode="HTML", reply_markup=kb.as_markup())
+    await cq.answer()
 
 # ================= Admin Credit/Debit Commands =================
 @dp.message(Command("credit"))

@@ -129,9 +129,11 @@ async def cmd_start(m: Message):
 
     args = m.text.split()
     referred_by = None
+    is_ref_link = False
 
     # Check if user joined via referral link
     if len(args) > 1 and args[1].startswith("ref"):
+        is_ref_link = True
         try:
             referred_by = int(args[1][3:])
         except:
@@ -141,8 +143,9 @@ async def cmd_start(m: Message):
     user = users_col.find_one({"_id": m.from_user.id})
 
     if user:
-        # Existing user
-        await m.answer("🌟 You’re already our valued user. Welcome back!")
+        # Only show message if user used a referral link
+        if is_ref_link:
+            await m.answer("🌟 You’re already our valued user. Welcome back!")
     else:
         # New user — create account
         user_data = {
@@ -173,9 +176,9 @@ async def cmd_start(m: Message):
 
         users_col.insert_one(user_data)
         await m.answer("🎉 Welcome! Your account has been created successfully.")
+
     # Ensure user exists in DB
     get_or_create_user(m.from_user.id, m.from_user.username)
-
     # Caption for start menu
     caption = (
         "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝗍 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"

@@ -290,11 +290,11 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
             # Check Fampay IMAP for the txn id (up to 10 sec)
             found = False
-            for _ in range(5):  # check 5 times, 2 sec interval
+            for _ in range(2):  # check 5 times, 2 sec interval
                 found, sender = check_fampay_emails(txnid)
                 if found:
                     break
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
             user = message.from_user
             screenshot = data.get("screenshot")

@@ -271,9 +271,10 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
     # ===== Screenshot & Amount Input =====
     @dp.message(StateFilter(RechargeState.waiting_deposit_screenshot))
-async def screenshot_fampay(message: Message, state: FSMContext):
-    data = await state.get_data()
-    is_fampay = data.get("is_fampay", False)
+    
+    async def screenshot_fampay(message: Message, state: FSMContext):
+        data = await state.get_data()
+        is_fampay = data.get("is_fampay", False)
 
     if message.photo:
         await state.update_data(screenshot=message.photo[-1].file_id)

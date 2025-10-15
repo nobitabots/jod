@@ -1,4 +1,6 @@
 import datetime
+import asyncio
+import re
 from bson import ObjectId
 from aiogram import F
 from aiogram.types import CallbackQuery, Message, FSInputFile
@@ -9,7 +11,7 @@ from aiogram.filters import StateFilter, Command
 from mustjoin import check_join
 
 # Import your Fampay checker function
-from your_fampay_module import check_fampay_emails  # should return (found: bool, sender: str)
+from fampaymodule import check_fampay_emails  # should return (found: bool, sender: str)
 
 # Recharge FSM
 class RechargeState(StatesGroup):

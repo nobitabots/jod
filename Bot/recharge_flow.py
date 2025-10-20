@@ -261,10 +261,11 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         await state.update_data(recharge_msg_id=msg.message_id)
         await cq.answer()
         
-@dp.callback_query(F.data == "razorpay_qr", StateFilter(RechargeState.choose_method))
-async def razorpay_qr(cq: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    msg_id = data.get("recharge_msg_id")
+# =====razor atomatic QR Flow =====
+    @dp.callback_query(F.data == "razorpay_qr", StateFilter(RechargeState.choose_method))
+    async def fampay_auto(cq: CallbackQuery, state: FSMContext):
+        data = await state.get_data()
+        msg_id = data.get("recharge_msg_id")
 
     try:
         await bot.delete_message(chat_id=cq.from_user.id, message_id=msg_id)

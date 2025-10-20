@@ -9,6 +9,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import StateFilter, Command
 from mustjoin import check_join
+import requests
+from requests.auth import HTTPBasicAuth
 
 # Import your Fampay checker function
 from fampaymodule import check_fampay_emails  # should return (found: bool, sender: str)
@@ -136,7 +138,8 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         kb = InlineKeyboardBuilder()
         kb.button(text="UPI", callback_data="upi_qr")
         kb.button(text="Crypto", callback_data="crypto_pay")
-        kb.button(text="Fampay", callback_data="fampay_auto")  # NEW
+        kb.button(text="Fampay", callback_data="fampay_auto")
+        kb.button(text="Razorpay", callback_data="razorpay_qr")# NEW
         kb.button(text="Go Back", callback_data="go_back")
         kb.adjust(2, 1)
 
@@ -252,6 +255,114 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         )
         await state.update_data(recharge_msg_id=msg.message_id)
         await cq.answer()
+        
+@dp.callback_query(F.data == "razorpay_qr", StateFilter(RechargeState.choose_method))
+async def razorpay_qr(cq: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    msg_id = data.get("recharge_msg_id")
+
+    try:
+        await bot.delete_message(chat_id=cq.from_user.id, message_id=msg_id)
+    except:
+        pass
+
+    qr_image = FSInputFile("razorpay_qr.jpg")  # your saved QR image
+
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ Done", callback_data="razorpay_done")
+    kb.button(text="Go Back", callback_data="deposit_now")
+    kb.adjust(2)
+
+    text = (
+        "💳 <b>Razorpay Payment</b>\n\n"
+        "📲 Scan this QR and make payment via any UPI app.\n\n"
+        "✅ Once payment is done, tap 'Done' and send your UTR (Transaction ID) when asked."
+    )
+
+    msg = await cq.message.answer_photo(
+        photo=qr_image,
+        caption=text,
+        parse_mode="HTML",
+        reply_markup=kb.as_markup()
+    )
+
+    await state.update_data(recharge_msg_id=msg.message_id)
+    await cq.answer()
+
+
+@dp.callback_query(F.data == "razorpay_done", StateFilter(RechargeState.choose_method))
+async def razorpay_done(cq: CallbackQuery, state: FSMContext):
+    await cq.message.answer("💬 Please send your UTR / Transaction ID to verify your payment.")
+    await state.update_data(is_razorpay=True)
+    await state.set_state(RechargeState.waiting_deposit_amount)
+    await cq.answer()
+
+
+    # ===== Razorpay Auto Verification =====
+is_razorpay = data.get("is_razorpay", False)
+if is_razorpay:
+    utr = message.text.strip()
+
+    await message.answer("⏳ Verifying your payment with Razorpay...")
+
+    url = f"https://api.razorpay.com/v1/payments?qr_id={RAZORPAY_QR_ID}"
+    res = requests.get(url, auth=HTTPBasicAuth(RAZORPAY_KEY, RAZORPAY_SECRET))
+    data_rz = res.json()
+
+    verified = False
+    payment_found = None
+    for p in data_rz.get("items", []):
+        txn_id = p.get("acquirer_data", {}).get("bank_transaction_id")
+        if txn_id and utr in txn_id and p["status"] == "captured":
+            verified = True
+            payment_found = p
+            break
+
+    user = message.from_user
+
+    if verified:
+        amount = payment_found["amount"] / 100  # Razorpay gives paise
+        users_col.update_one({"_id": user.id}, {"$inc": {"balance": amount}})
+        await message.answer(f"✅ Payment verified! ₹{amount} credited successfully.")
+        await state.clear()
+    else:
+        await message.answer(
+            "❌ Could not verify your payment automatically.\n"
+            "Your payment has been sent for manual review."
+        )
+        txn_doc = {
+            "user_id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "is_razorpay": True,
+            "utr": utr,
+            "status": "pending",
+            "created_at": datetime.datetime.utcnow()
+        }
+        txn_id = txns_col.insert_one(txn_doc).inserted_id
+
+        kb_admin = InlineKeyboardBuilder()
+        kb_admin.button(text="✅ Approve", callback_data=f"approve_txn:{txn_id}")
+        kb_admin.button(text="❌ Decline", callback_data=f"decline_txn:{txn_id}")
+        kb_admin.adjust(2)
+
+        for admin_id in ADMIN_IDS:
+            try:
+                await bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"<b>Manual Razorpay Verification Required</b>\n\n"
+                        f"Name: {user.full_name}\n"
+                        f"Username: @{user.username}\n"
+                        f"UTR: {utr}"
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=kb_admin.as_markup()
+                )
+            except Exception:
+                pass
+        await state.clear()
+    return
 
     # ===== Fampay Deposit Handling =====
     @dp.callback_query(F.data == "fampay_deposit", StateFilter(RechargeState.choose_method))

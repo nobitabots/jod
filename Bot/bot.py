@@ -1,10 +1,8 @@
 import os
 import asyncio
 import html
-from sell_flow import register_sell_handlers
 from aiogram.fsm.context import FSMContext
-from datetime import timezone
-import datetime
+from datetime import datetime, timezone
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, StateFilter
@@ -17,6 +15,8 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 from aiogram.utils.deep_linking import create_start_link
 import re
+from aiogram import types
+import random
 from aiogram.types import InputMediaVideo
 from recharge_flow import register_recharge_handlers
 from mustjoin import check_join
@@ -81,35 +81,41 @@ async def otp_listener(number_doc, user_id):
                         # --- Send OTP to user ---
                         await bot.send_message(
                             user_id,
-                            f"✅ OTP for +{number_doc['number']}:\n\nOTP - <code>{code}</code>\nPass - <code>9923</code>\n\n<pre>Order Completed ✅</pre>",
+                            f"✅ OTP for +{number_doc['number']}:\n\nOTP - <code>{code}</code>\nPass - <code>OTPBOT123</code>\n\n<pre>Order Completed ✅</pre>",
                             parse_mode="HTML"
                         )
-
-                        # --- Send update to channel ---
-                        # Get buyer info
+                        # --- Get buyer info ---
                         user = users_col.find_one({"_id": user_id})
                         buyer_name = user.get("username") or f"User {user_id}"
                         country = number_doc.get("country", "Unknown")
                         price = number_doc.get("price", "N/A")
-
+                        number = number_doc.get("number", "Unknown")
+                        
                         channel_message = (
                             f"<pre>✅ <b>𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖯𝗎𝗋𝖼𝗁𝖺𝗌𝖾 𝖲𝗎𝖼𝖼𝖾𝗌𝗌𝖿𝗎𝗅</b></pre>\n\n"
                             f"• For country :- {country}\n"
                             f"<b>• Application Type :- Telegram </b>\n\n"
                             f"<b>• Number :- h̶i̶d̶d̶e̶n̶•••• 📞</b>\n"
-                            f"<b>• Price :- ₹{price}</b>\n\n"
+                            f"<b>• OTP :- {code}</b>\n"
+                            f"<b>• Price :- ₹{price}</b>\n\n"
                             f"We are glad to have you as a customer!\n"
-                            f"<b>• @TG_ACC_STORE_BOT</b>"
+                            f"<b>• @TG_ACC_ST0RE</b>"
                         )
-
                         await bot.send_message("@TG_ACC_ST0RE", channel_message, parse_mode="HTML")
-
-                        # --- Update number document in DB ---
+                        balance = user.get("balance", "N/A")
+                        admin_message = (
+                            f"<pre>📢 New Purchase Alert</pre>\n\n"
+                            f"<pre>• Application: Telegram</pre>\n"
+                            f"<b>• Country:</b> {country}\n"
+                            f"<b>• Number:</b> +{number}\n"
+                            f"<b>• OTP Received:</b> <code>{code}</code>\n\n"
+                            f"<b>👤 User:</b> {buyer_name} (<code>{user_id}</code>)\n"
+                            f"<b>💰 User Balance:</b> ₹{balance}"
+                        )
+                        await bot.send_message("@SERECT01171", admin_message, parse_mode="HTML")
                         numbers_col.update_one(
                             {"_id": number_doc["_id"]},
-                            {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}}
-                        )
-
+                            {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}})
                         await client.disconnect()
                         return
 
@@ -122,17 +128,15 @@ async def otp_listener(number_doc, user_id):
             parse_mode="HTML"
         )
 
-# ================= START =================
+
+#START_CKMMAND
+
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
-    if not await check_join(bot, m):
-        return
-
     args = m.text.split()
     referred_by = None
     is_ref_link = False
 
-    # Check if user joined via referral link
     if len(args) > 1 and args[1].startswith("ref"):
         is_ref_link = True
         try:
@@ -140,26 +144,11 @@ async def cmd_start(m: Message):
         except:
             referred_by = None
 
-    # Check if user already exists
     user = users_col.find_one({"_id": m.from_user.id})
 
     if user:
-        # Only show message if user used a referral link
-        if is_ref_link:
-            await m.answer("🌟 You’re already our valued user. Welcome back!")
-    else:
-        # New user — create account
-        user_data = {
-            "_id": m.from_user.id,
-            "username": m.from_user.username or None,
-            "balance": 0.0,
-            "joined_at": datetime.datetime.utcnow(),
-        }
-
-        if referred_by and referred_by != m.from_user.id:
-            user_data["referred_by"] = referred_by
-
-            # Notify referrer
+        if is_ref_link and "referred_by" not in user and referred_by and referred_by != m.from_user.id:
+            users_col.update_one({"_id": m.from_user.id}, {"$set": {"referred_by": referred_by}})
             try:
                 ref_user = users_col.find_one({"_id": referred_by})
                 if ref_user:
@@ -168,21 +157,61 @@ async def cmd_start(m: Message):
                         text=(
                             f"👋 <b>New Referral!</b>\n"
                             f"@{m.from_user.username or m.from_user.full_name} just started the bot using your referral link.\n\n"
-                            f"💰 Whenever they add balance, you’ll earn <b>2%</b> of their recharge!"
+                            f"💰 You’ll now earn <b>2%</b> whenever they add balance!"
                         ),
+                        parse_mode="HTML"
+                    )
+                    users_col.update_one({"_id": referred_by}, {"$inc": {"balance": 0.1}})
+                    await bot.send_message(
+                        chat_id=referred_by,
+                        text="🎉 You’ve earned <b>₹0.1</b> for referring a new user!",
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                print("Referral notify error:", e)
+        else:
+            await m.answer("🚀")
+    else:
+        user_data = {
+            "_id": m.from_user.id,
+            "username": m.from_user.username or None,
+            "balance": 0.0,
+            "joined_at": datetime.now(timezone.utc),
+        }
+        if referred_by and referred_by != m.from_user.id:
+            user_data["referred_by"] = referred_by
+        users_col.insert_one(user_data)
+        await m.answer("Hey New User 👋")
+
+        if referred_by and referred_by != m.from_user.id:
+            try:
+                ref_user = users_col.find_one({"_id": referred_by})
+                if ref_user:
+                    await bot.send_message(
+                        chat_id=referred_by,
+                        text=(
+                            f"👋 <b>New Referral!</b>\n"
+                            f"@{m.from_user.username or m.from_user.full_name} just started the bot using your referral link.\n\n"
+                            f"💰 You’ll earn <b>2%</b> whenever they add balance!"
+                        ),
+                        parse_mode="HTML"
+                    )
+                    users_col.update_one({"_id": referred_by}, {"$inc": {"balance": 0.1}})
+                    await bot.send_message(
+                        chat_id=referred_by,
+                        text="🎉 You’ve earned <b>₹0.1</b> for referring a new user!",
                         parse_mode="HTML"
                     )
             except Exception as e:
                 print("Referral notify error:", e)
 
-        users_col.insert_one(user_data)
-        await m.answer("🎉 Welcome! Your account has been created successfully.")
+    if not await check_join(bot, m):
+        return
 
-    # Ensure user exists in DB
     get_or_create_user(m.from_user.id, m.from_user.username)
-    # Caption for start menu
+
     caption = (
-        "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝗍 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
+        "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
         "<blockquote expandable>- 𝖠𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼 𝖮𝖳𝖯𝗌 📌 \n"
         "- 𝖤𝖺𝗌𝗒 𝗍𝗈 𝖴𝗌𝖾 🥂\n"
         "- 24/7 𝖲𝗎𝗉𝗉𝗈𝗋𝗍 👨‍🔧\n"
@@ -191,7 +220,6 @@ async def cmd_start(m: Message):
         "🚀 𝖤𝗇𝗃𝗈𝗒 𝖥𝖺𝗌𝗍 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖻𝗎𝗒𝗂𝗇𝗀 𝖤𝗑𝗉𝖾𝗋𝗂𝖾𝗇𝖼𝖾!"
     )
 
-    # Inline keyboard
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
@@ -199,21 +227,18 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/Prabhatuzumaki")
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/II_SPEED_II")
     )
     kb.row(
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
         InlineKeyboardButton(text="🆘 How to Use?", callback_data="howto")
     )
-    kb.row( 
+    kb.row(
         InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem"),
-        InlineKeyboardButton(text="🥂 Refer & Earn", callback_data="refer"),  
+        InlineKeyboardButton(text="🥂 Refer & Earn", callback_data="refer"),
     )
 
-    # Step 1: Send 🥂 emoji first
     menu_msg = await m.answer("🥂")
-
-    # Step 2: Edit the same message into a video with caption and buttons
     try:
         await menu_msg.edit_media(
             media=InputMediaVideo(
@@ -224,11 +249,10 @@ async def cmd_start(m: Message):
             reply_markup=kb.as_markup()
         )
     except Exception as e:
-        # fallback if video edit fails
         await menu_msg.edit_text(caption, reply_markup=kb.as_markup())
         print("Start video edit failed:", e)
-
-
+        
+            
 # ================= Balance =================
 @dp.callback_query(F.data == "balance")
 async def show_balance(cq: CallbackQuery):
@@ -253,7 +277,7 @@ async def send_country_menu(message, previous=""):
     kb.adjust(2)
 
     if previous:
-        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/Prabhatuzumaki"))
+        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/II_SPEED_II"))
 
     # Send a new message for country selection (do not edit the start message)
     country_msg = await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
@@ -675,20 +699,25 @@ async def callback_stats(cq: CallbackQuery):
         f"💰 Balance: ₹{user.get('balance', 0.0):.2f}"
     )
 
-    image_url = "https://files.catbox.moe/j538n5.jpg"
-    await cq.message.answer_photo(photo=image_url, caption=text)
+    image_url = "https://files.catbox.moe/a3o6j9.jpg"
+    
+    kb = InlineKeyboardBuilder()
+    kb.row(InlineKeyboardButton(text="📲 Support", url=f"https://t.me/II_SPEED_II"))
+    
+    await cq.message.answer_photo(photo=image_url, caption=text, parse_mode="HTML", reply_markup=kb.as_markup())
     await cq.answer()
 
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
-    steps_text = (
-        "📌 How to Use:\n\n"
-        "Step 1️⃣ - Recharge\n"
-        "Step 2️⃣ - Select Country\n"
-        "Step 3️⃣ - Set Quantity\n"
-        "Step 4️⃣ - Get Number & Receive Code"
+    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @OtpBotUse\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @PRABHATUZUMAKI\n🤖 Oғғɪᴄɪᴀʟ Bᴏᴛ:     👉 @TG_ACC_STORE_BOT\n\n🛟 Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
+
+    kb = InlineKeyboardBuilder()
+    kb.row(
+        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/II_SHIVAM_II"),
+        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/OtpBotUse")
     )
-    await cq.message.answer(steps_text)
+    
+    await cq.message.answer(steps_text, parse_mode="HTML", reply_markup=kb.as_markup())
     await cq.answer()
 
 @dp.callback_query(F.data == "refer")
@@ -712,7 +741,7 @@ async def callback_refer(cq: CallbackQuery):
     await cq.answer()
 
 # ================= Admin Credit/Debit Commands =================
-@dp.message(Command("credit"))
+@dp.message(Command("addbal"))
 async def cmd_credit(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
@@ -745,7 +774,7 @@ async def handle_credit(msg: Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(Command("debit"))
+@dp.message(Command("removebal"))
 async def cmd_debit(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
@@ -781,33 +810,60 @@ async def handle_debit(msg: Message, state: FSMContext):
 
 
 
+
+
+
+
+
+
     # ================= MongoDB Redeem Collection =================
 redeem_col = db["redeem_codes"]  # Add this at top with other collections
 
 # ================= Redeem FSM =================
 class RedeemState(StatesGroup):
-    waiting_amount = State()  # Admin enters amount
-    waiting_limit = State()   # Admin selects max users via inline numeric keypad
+    # For auto-generated redeem codes
+    waiting_amount = State()          # Admin enters amount
+    waiting_limit = State()           # Admin selects max users via inline numeric keypad
+
+    # For custom redeem codes
+    waiting_code = State()            # Admin enters custom code (e.g. DIWALI100)
+    waiting_amount_custom = State()   # Admin enters amount for custom code
+    waiting_limit_custom = State()    # Admin selects max users for custom code
 
 class UserRedeemState(StatesGroup):
-    waiting_code = State()    # User enters redeem code
-
+    waiting_code = State()            # User enters redeem code
+    
 # ================= Helper =================
 import random, string
 def generate_code(length=8):
     """Generate code like HEIKE938"""
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-# ================= Admin: Create Redeem =================
-@dp.message(Command("createredeem"))
-async def cmd_create_redeem(msg: Message, state: FSMContext):
+
+
+    
+        # ================= Admin: Create Custom Redeem =================
+@dp.message(Command("cusredeem"))
+async def cmd_custom_redeem(msg: Message, state: FSMContext):
     if not is_admin(msg.from_user.id):
         return await msg.answer("❌ Not authorized.")
-    await msg.answer("💰 Enter the amount for this redeem code:")
-    await state.set_state(RedeemState.waiting_amount)
+    await msg.answer("🎟️ Enter the custom redeem code (e.g. DIWALI100):")
+    await state.set_state(RedeemState.waiting_code)
 
-@dp.message(StateFilter(RedeemState.waiting_amount))
-async def handle_redeem_amount(msg: Message, state: FSMContext):
+# ================= Admin: Handle Custom Code =================
+@dp.message(StateFilter(RedeemState.waiting_code))
+async def handle_custom_code(msg: Message, state: FSMContext):
+    code = msg.text.strip().upper()
+    if redeem_col.find_one({"code": code}):
+        return await msg.answer("⚠️ This code already exists. Try another one.")
+
+    await state.update_data(custom_code=code)
+    await msg.answer("💰 Enter the amount for this redeem code:")
+    await state.set_state(RedeemState.waiting_amount_custom)
+
+# ================= Admin: Handle Custom Amount =================
+@dp.message(StateFilter(RedeemState.waiting_amount_custom))
+async def handle_custom_amount(msg: Message, state: FSMContext):
     try:
         amount = float(msg.text.strip())
         if amount <= 0:
@@ -815,23 +871,23 @@ async def handle_redeem_amount(msg: Message, state: FSMContext):
     except ValueError:
         return await msg.answer("❌ Invalid amount. Send a number like 50 or 100.")
 
-    await state.update_data(amount=amount, limit_str="")  # Initialize numeric string
+    await state.update_data(amount=amount, limit_str="")
 
-    # Numeric keypad
+    # Inline numeric keypad
     kb = InlineKeyboardBuilder()
-    for row in (("1","2","3"), ("4","5","6"), ("7","8","9"), ("0","❌","✅")):
-        kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"redeemnum:{btn}") for btn in row])
+    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"), ("0", "❌", "✅")):
+        kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"cusredeemnum:{btn}") for btn in row])
 
     await msg.answer(
-        "👥 Select max number of users who can claim this code:\n<b>0</b>",
+        "👥 Select max number of users who can claim this custom code:\n<b>0</b>",
         parse_mode="HTML",
         reply_markup=kb.as_markup()
     )
-    await state.set_state(RedeemState.waiting_limit)
+    await state.set_state(RedeemState.waiting_limit_custom)
 
-# ================= Admin: Handle Inline Number Pad =================
-@dp.callback_query(F.data.startswith("redeemnum:"))
-async def handle_redeem_number(cq: CallbackQuery, state: FSMContext):
+# ================= Admin: Handle Custom Inline Number Pad =================
+@dp.callback_query(F.data.startswith("cusredeemnum:"))
+async def handle_custom_redeem_number(cq: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     current = data.get("limit_str", "")
     value = cq.data.split(":")[1]
@@ -848,11 +904,11 @@ async def handle_redeem_number(cq: CallbackQuery, state: FSMContext):
             await cq.answer("❌ Invalid number.", show_alert=True)
             return
 
+        code = data.get("custom_code")
         amount = data.get("amount")
-        code = generate_code()
         created_at = datetime.utcnow()
 
-        # Insert redeem code into MongoDB
+        # Insert redeem into MongoDB
         redeem_col.insert_one({
             "code": code,
             "amount": amount,
@@ -863,7 +919,7 @@ async def handle_redeem_number(cq: CallbackQuery, state: FSMContext):
         })
 
         await cq.message.edit_text(
-            f"✅ Redeem code created!\n\n"
+            f"✅ Custom redeem code created!\n\n"
             f"🎟️ Code: <code>{code}</code>\n"
             f"💰 Amount: ₹{amount:.2f}\n"
             f"👥 Max Claims: {limit}",
@@ -878,17 +934,19 @@ async def handle_redeem_number(cq: CallbackQuery, state: FSMContext):
 
     await state.update_data(limit_str=current)
 
-    # Rebuild keypad every callback to prevent freezing
+    # Rebuild keypad dynamically
     kb = InlineKeyboardBuilder()
-    for row in (("1","2","3"), ("4","5","6"), ("7","8","9"), ("0","❌","✅")):
-        kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"redeemnum:{btn}") for btn in row])
+    for row in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"), ("0", "❌", "✅")):
+        kb.row(*[InlineKeyboardButton(text=btn, callback_data=f"cusredeemnum:{btn}") for btn in row])
 
     await cq.message.edit_text(
-        f"👥 Select max number of users who can claim this code:\n<b>{current or '0'}</b>",
+        f"👥 Select max number of users who can claim this custom code:\n<b>{current or '0'}</b>",
         parse_mode="HTML",
         reply_markup=kb.as_markup()
     )
     await cq.answer()
+        
+
 
 # ================= Admin: View Redeems =================
 @dp.message(Command("redeemlist"))
@@ -1016,8 +1074,6 @@ async def cmd_broadcast(msg: Message):
 
 # ===== Register External Handlers =====
 register_recharge_handlers(dp=dp, bot=bot, users_col=users_col, txns_col=db["transactions"], ADMIN_IDS=ADMIN_IDS)
-register_sell_handlers(dp, bot)  # ✅ no await
-dp.run_polling(bot)
 
 # ===== Bot Runner =====
 async def main():

@@ -81,7 +81,7 @@ async def otp_listener(number_doc, user_id):
                         # --- Send OTP to user ---
                         await bot.send_message(
                             user_id,
-                            f"✅ OTP for +{number_doc['number']}:\n\nOTP - <code>{code}</code>\nPass - <code>OTPBOT123</code>\n\n<pre>Order Completed ✅</pre>",
+                            f"✅ OTP for +{number_doc['number']}:\n\nOTP - <code>{code}</code>\nPass - <code>9923</code>\n\n<pre>Order Completed ✅</pre>",
                             parse_mode="HTML"
                         )
                         # --- Get buyer info ---
@@ -101,7 +101,7 @@ async def otp_listener(number_doc, user_id):
                             f"We are glad to have you as a customer!\n"
                             f"<b>• @TG_ACC_ST0RE</b>"
                         )
-                        await bot.send_message("@TG_ACC_ST0RE", channel_message, parse_mode="HTML")
+                        await bot.send_message("tgaccbototp", channel_message, parse_mode="HTML")
                         balance = user.get("balance", "N/A")
                         admin_message = (
                             f"<pre>📢 New Purchase Alert</pre>\n\n"
@@ -112,7 +112,7 @@ async def otp_listener(number_doc, user_id):
                             f"<b>👤 User:</b> {buyer_name} (<code>{user_id}</code>)\n"
                             f"<b>💰 User Balance:</b> ₹{balance}"
                         )
-                        await bot.send_message("@SERECT01171", admin_message, parse_mode="HTML")
+                        await bot.send_message("BOTNOTF", admin_message, parse_mode="HTML")
                         numbers_col.update_one(
                             {"_id": number_doc["_id"]},
                             {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}})
@@ -394,7 +394,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
     # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
         await msg.answer(
-            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @Prabhatuzumaki</blockquote>"
+            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @II_SPEED_II</blockquote>"
         )
         # start OTP listener in background
         asyncio.create_task(otp_listener(num, msg.from_user.id))

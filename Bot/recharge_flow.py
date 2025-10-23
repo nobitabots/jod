@@ -178,7 +178,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         except:
             pass
 
-        qr_image = FSInputFile("https://files.catbox.moe/ceyfdf.jpg")
+        qr_image = "https://files.catbox.moe/ceyfdf.jpg"
 
         kb = InlineKeyboardBuilder()
         kb.button(text="Deposit", callback_data="send_deposit")

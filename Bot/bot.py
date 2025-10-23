@@ -709,12 +709,12 @@ async def callback_stats(cq: CallbackQuery):
 
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
-    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @OtpBotUse\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @PRABHATUZUMAKI\n🤖 Oғғɪᴄɪᴀʟ Bᴏᴛ:     👉 @TG_ACC_STORE_BOT\n\n🛟 Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
+    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @USEOTPBOT\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @II_SPEED_II\n🤖 Oғғɪᴄɪᴀʟ Bᴏᴛ:     👉 @tgaccOtpbot\n\n🛟 Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/II_SHIVAM_II"),
-        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/OtpBotUse")
+        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/II_SPEED_II"),
+        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/USEOTPBOT")
     )
     
     await cq.message.answer(steps_text, parse_mode="HTML", reply_markup=kb.as_markup())

@@ -9,18 +9,14 @@ def _getenv(name: str, default: str | None = None, required: bool = False) -> st
         raise RuntimeError(f"Missing required env var: {name}")
     return val
     
-MUST_JOIN_CHANNEL = "@otpgrabers"
-LOG_CHANNEL= "@otpgrabers"
+MUST_JOIN_CHANNEL = "@tgaccbototp"
+LOG_CHANNEL= "@tgaccbototp"
 BOT_TOKEN = _getenv("BOT_TOKEN", required=True)
 ADMIN_IDS = [int(i) for i in _getenv("ADMIN_IDS", "", required=True).replace(" ", "").split(",") if i]
 API_ID = "21377358"
 API_HASH = "e05bc1f4f03839db7864a99dbf72d1cd"
 
-DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://quickcodes:Stalker123@quickcodes.dm6vjhj.mongodb.net/?retryWrites=true&w=majority&appName=QuickCodes")
-
-RAZORPAY_KEY = "rzp_live_RUz5wtgZP3tvCP"  # or test key
-RAZORPAY_SECRET = "gLALuFYkH5A6p0PYloIPYs32"
-RAZORPAY_QR_ID = "qr_RVekORneOQMpBD"
+DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://Hkbots:Hk2558@hkbots.wqsuua0.mongodb.net/?retryWrites=true&w=majority&appName=HKBOTS")
 
 PROVIDER_PARAM_APIKEY = _getenv("PROVIDER_PARAM_APIKEY", "api_key")
 PROVIDER_PARAM_SERVICE = _getenv("PROVIDER_PARAM_SERVICE", "service")

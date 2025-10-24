@@ -146,67 +146,7 @@ async def cmd_start(m: Message):
 
     user = users_col.find_one({"_id": m.from_user.id})
 
-    if user:
-        if is_ref_link and "referred_by" not in user and referred_by and referred_by != m.from_user.id:
-            users_col.update_one({"_id": m.from_user.id}, {"$set": {"referred_by": referred_by}})
-            try:
-                ref_user = users_col.find_one({"_id": referred_by})
-                if ref_user:
-                    await bot.send_message(
-                        chat_id=referred_by,
-                        text=(
-                            f"👋 <b>New Referral!</b>\n"
-                            f"@{m.from_user.username or m.from_user.full_name} just started the bot using your referral link.\n\n"
-                            f"💰 You’ll now earn <b>2%</b> whenever they add balance!"
-                        ),
-                        parse_mode="HTML"
-                    )
-                    users_col.update_one({"_id": referred_by}, {"$inc": {"balance": 0.1}})
-                    await bot.send_message(
-                        chat_id=referred_by,
-                        text="🎉 You’ve earned <b>₹0.1</b> for referring a new user!",
-                        parse_mode="HTML"
-                    )
-            except Exception as e:
-                print("Referral notify error:", e)
-        else:
-            await m.answer("🚀")
-    else:
-        user_data = {
-            "_id": m.from_user.id,
-            "username": m.from_user.username or None,
-            "balance": 0.0,
-            "joined_at": datetime.now(timezone.utc),
-        }
-        if referred_by and referred_by != m.from_user.id:
-            user_data["referred_by"] = referred_by
-        users_col.insert_one(user_data)
-        await m.answer("Hey New User 👋")
 
-        if referred_by and referred_by != m.from_user.id:
-            try:
-                ref_user = users_col.find_one({"_id": referred_by})
-                if ref_user:
-                    await bot.send_message(
-                        chat_id=referred_by,
-                        text=(
-                            f"👋 <b>New Referral!</b>\n"
-                            f"@{m.from_user.username or m.from_user.full_name} just started the bot using your referral link.\n\n"
-                            f"💰 You’ll earn <b>2%</b> whenever they add balance!"
-                        ),
-                        parse_mode="HTML"
-                    )
-                    users_col.update_one({"_id": referred_by}, {"$inc": {"balance": 0.1}})
-                    await bot.send_message(
-                        chat_id=referred_by,
-                        text="🎉 You’ve earned <b>₹0.1</b> for referring a new user!",
-                        parse_mode="HTML"
-                    )
-            except Exception as e:
-                print("Referral notify error:", e)
-
-    if not await check_join(bot, m):
-        return
 
     get_or_create_user(m.from_user.id, m.from_user.username)
 
@@ -235,7 +175,6 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem"),
-        InlineKeyboardButton(text="🥂 Refer & Earn", callback_data="refer"),
     )
 
     menu_msg = await m.answer("🥂")

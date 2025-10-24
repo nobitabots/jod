@@ -128,8 +128,8 @@ async def otp_listener(number_doc, user_id):
             parse_mode="HTML"
         )
 
-
-#START_CKMMAND
+# === your channel usernames ===
+REQUIRED_CHANNELS = ["tgaccbototp", "tgids_store"]
 
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
@@ -145,10 +145,32 @@ async def cmd_start(m: Message):
             referred_by = None
 
     user = users_col.find_one({"_id": m.from_user.id})
-
-
-
     get_or_create_user(m.from_user.id, m.from_user.username)
+
+    # 🔒 Check if user joined both required channels
+    not_joined = []
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(channel, m.from_user.id)
+            if member.status not in ["member", "administrator", "creator"]:
+                not_joined.append(channel)
+        except Exception:
+            not_joined.append(channel)
+
+    # ❌ If not joined, show join buttons and stop further execution
+    if not_joined:
+        kb = InlineKeyboardBuilder()
+        for ch in not_joined:
+            kb.button(text=f"Join {ch.replace('@', '')}", url=f"https://t.me/{ch.replace('@', '')}")
+        kb.button(text="✅ I've Joined", callback_data="check_join")
+        kb.adjust(1)
+        return await m.answer(
+            "🚫 <b>You must join our channels before using the bot:</b>",
+            reply_markup=kb.as_markup(),
+            parse_mode="HTML"
+        )
+
+    
 
     caption = (
         "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
@@ -191,7 +213,23 @@ async def cmd_start(m: Message):
         await menu_msg.edit_text(caption, reply_markup=kb.as_markup())
         print("Start video edit failed:", e)
         
-            
+@dp.callback_query(F.data == "check_join")
+async def check_join(cq: CallbackQuery):
+    not_joined = []
+    for channel in REQUIRED_CHANNELS:
+        try:
+            member = await bot.get_chat_member(channel, cq.from_user.id)
+            if member.status not in ["member", "administrator", "creator"]:
+                not_joined.append(channel)
+        except Exception:
+            not_joined.append(channel)
+
+    if not_joined:
+        return await cq.answer("❌ You haven’t joined all required channels yet!", show_alert=True)
+
+    await cq.message.delete()
+    await cmd_start(cq.message)  # restart start command after verification
+    
 # ================= Balance =================
 @dp.callback_query(F.data == "balance")
 async def show_balance(cq: CallbackQuery):

@@ -459,6 +459,32 @@ async def add_number_with_password(msg: Message, state: FSMContext):
         await client.disconnect()
         await msg.answer(f"❌ Error signing in with password: {e}")
 
+# ================= /sales Command =================
+@dp.message(Command("sales"))
+async def cmd_sales(msg: Message):
+    if not is_admin(msg.from_user.id):
+        return await msg.answer("❌ You are not authorized to view sales report.")
+
+    # Fetch all orders
+    all_orders = list(orders_col.find({"status": "purchased"}))
+    if not all_orders:
+        return await msg.answer("📊 No sales data found yet.")
+
+    # Compute totals
+    total_numbers_sold = sum(order.get("price", 0) / order.get("price", 0) * 1 for order in all_orders)  # fallback in case quantity isn't stored
+    total_numbers_sold = len(all_orders)  # Each order is 1 number in your system
+    total_earnings = sum(order.get("price", 0) for order in all_orders)
+    average_price = total_earnings / total_numbers_sold if total_numbers_sold else 0
+
+    report = (
+        "📊 <b>Bot Profit Report</b>\n\n"
+        f"🔢 Total Numbers Sold: {total_numbers_sold}\n"
+        f"💰 Total Earnings: ₹{total_earnings:.2f}\n"
+        f"⚖️ Average Price/Number: ₹{average_price:.2f}"
+    )
+
+    await msg.answer(report, parse_mode="HTML")
+
 # ===== Admin Country Commands =====
 @dp.message(Command("addcountry"))
 async def cmd_add_country(msg: Message, state: FSMContext):
@@ -1024,29 +1050,3 @@ if __name__ == "__main__":
 
 
 
-# ================= /sales Command =================
-@dp.message(Command("sales"))
-async def cmd_sales(msg: Message):
-    if not is_admin(msg.from_user.id):
-        return await msg.answer("❌ You are not authorized to view sales report.")
-
-    # Fetch all orders
-    all_orders = list(orders_col.find({"status": "purchased"}))
-    if not all_orders:
-        return await msg.answer("📊 No sales data found yet.")
-
-    # Compute totals
-    total_numbers_sold = sum(order.get("price", 0) / order.get("price", 0) * 1 for order in all_orders)  # fallback in case quantity isn't stored
-    total_numbers_sold = len(all_orders)  # Each order is 1 number in your system
-    total_earnings = sum(order.get("price", 0) for order in all_orders)
-    average_price = total_earnings / total_numbers_sold if total_numbers_sold else 0
-
-    report = (
-        "📊 <b>Bot Profit Report</b>\n\n"
-        f"🔢 Total Numbers Sold: {total_numbers_sold}\n"
-        f"💰 Total Earnings: ₹{total_earnings:.2f}\n"
-        f"⚖️ Average Price/Number: ₹{average_price:.2f}"
-    )
-
-    await msg.answer(report, parse_mode="HTML")
-    

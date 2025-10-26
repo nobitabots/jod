@@ -129,7 +129,10 @@ async def otp_listener(number_doc, user_id):
         )
 
 # === your channel usernames ===
-REQUIRED_CHANNELS = ["tgaccbototp", "https://t.me/+MFPTkww-UFFlZjhl"]
+REQUIRED_CHANNELS = [
+    "tgaccbototp",  # public username
+    "https://t.me/+MFPTkww-UFFlZjhl"  # private invite link
+]
 
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
@@ -151,17 +154,32 @@ async def cmd_start(m: Message):
     not_joined = []
     for channel in REQUIRED_CHANNELS:
         try:
-            member = await bot.get_chat_member(channel, m.from_user.id)
+            # If channel is a link (private), extract chat info from link
+            if channel.startswith("https://t.me/"):
+                invite_link = channel
+                chat = await bot.get_chat(invite_link)
+                member = await bot.get_chat_member(chat.id, m.from_user.id)
+            else:
+                # public username
+                member = await bot.get_chat_member(channel, m.from_user.id)
+
             if member.status not in ["member", "administrator", "creator"]:
                 not_joined.append(channel)
-        except Exception:
+
+        except Exception as e:
+            # In case of any error (e.g. not a member / invalid link)
             not_joined.append(channel)
 
     # ❌ If not joined, show join buttons and stop further execution
     if not_joined:
         kb = InlineKeyboardBuilder()
         for ch in not_joined:
-            kb.button(text=f"Join {ch.replace('@', '')}", url=f"https://t.me/{ch.replace('@', '')}")
+            if ch.startswith("https://t.me/"):
+                # private invite link
+                kb.button(text="Join Private Channel 🔒", url=ch)
+            else:
+                # public username
+                kb.button(text=f"Join @{ch}", url=f"https://t.me/{ch}")
         kb.button(text="✅ I've Joined", callback_data="check_join")
         kb.adjust(1)
         return await m.answer(
@@ -170,7 +188,8 @@ async def cmd_start(m: Message):
             parse_mode="HTML"
         )
 
-    
+    # ✅ If user joined all channels, continue...
+    await m.answer("✅ You have joined all required channels! Welcome 🎉")
 
     caption = (
         "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"

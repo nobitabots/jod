@@ -16,7 +16,7 @@ ADMIN_IDS = [int(i) for i in _getenv("ADMIN_IDS", "", required=True).replace(" "
 API_ID = "21377358"
 API_HASH = "e05bc1f4f03839db7864a99dbf72d1cd"
 
-DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://GOJO49:GOJO49@nobita-gojo.sbj0bfw.mongodb.net/?retryWrites=true&w=majority&appName=NOBITA-GOJO")
+DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://Hkbots:Hk2558@hkbots.wqsuua0.mongodb.net/?retryWrites=true&w=majority&appName=HKBOTS")
 
 PROVIDER_PARAM_APIKEY = _getenv("PROVIDER_PARAM_APIKEY", "api_key")
 PROVIDER_PARAM_SERVICE = _getenv("PROVIDER_PARAM_SERVICE", "service")

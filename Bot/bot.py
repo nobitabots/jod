@@ -99,7 +99,7 @@ async def otp_listener(number_doc, user_id):
                             f"<b>• OTP :- {code}</b>\n"
                             f"<b>• Price :- ₹{price}</b>\n\n"
                             f"We are glad to have you as a customer!\n"
-                            f"<b>• @tgaccbototp</b>"
+                            f"<b>• @TGidStoreBot</b>"
                         )
                         await bot.send_message("@buyfrombototp", channel_message, parse_mode="HTML")
                         balance = user.get("balance", "N/A")

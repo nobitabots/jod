@@ -101,7 +101,7 @@ async def otp_listener(number_doc, user_id):
                             f"We are glad to have you as a customer!\n"
                             f"<b>• @tgaccbototp</b>"
                         )
-                        await bot.send_message("@tgaccbototp", channel_message, parse_mode="HTML")
+                        await bot.send_message("@buyfrombototp", channel_message, parse_mode="HTML")
                         balance = user.get("balance", "N/A")
                         admin_message = (
                             f"<pre>📢 New Purchase Alert</pre>\n\n"
@@ -112,7 +112,7 @@ async def otp_listener(number_doc, user_id):
                             f"<b>👤 User:</b> {buyer_name} (<code>{user_id}</code>)\n"
                             f"<b>💰 User Balance:</b> ₹{balance}"
                         )
-                        await bot.send_message("@otprecvier", admin_message, parse_mode="HTML")
+                        await bot.send_message("@otpsccbot", admin_message, parse_mode="HTML")
                         numbers_col.update_one(
                             {"_id": number_doc["_id"]},
                             {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}})
@@ -129,7 +129,7 @@ async def otp_listener(number_doc, user_id):
         )
 
 # === your channel usernames ===
-REQUIRED_CHANNELS = ["@tgaccbototp"]
+REQUIRED_CHANNELS = ["@TG_IDS_VAULT"]
 
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
@@ -170,15 +170,19 @@ async def cmd_start(m: Message):
             parse_mode="HTML"
         ) 
     caption = (
-        "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
-        "<blockquote expandable>- 𝖠𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼 𝖮𝖳𝖯𝗌 📌 \n"
-        "- 𝖤𝖺𝗌𝗒 𝗍𝗈 𝖴𝗌𝖾 🥂\n"
-        "- 24/7 𝖲𝗎𝗉𝗉𝗈𝗋𝗍 👨‍🔧\n"
-        "- 𝖨𝗇𝗌𝗍𝖺𝗇𝗍 𝖯𝖺𝗒𝗆𝖾𝗇𝗍 𝖺𝗉𝗉𝗋𝗈𝗏𝖺𝗅𝗌 🧾 </blockquote>\n"
-        "<blockquote expandable><b>🚀 𝖧𝗈𝗐 𝗍𝗈 𝗎𝗌𝖾 𝖡𝗈𝗍 :</b> \n1️⃣ 𝖱𝖾𝖼𝗁𝖺𝗋𝗀𝖾 \n2️⃣ 𝖲𝖾𝗅𝖾𝖼𝗍 𝖢𝗈𝗎𝗇𝗍𝗋𝗒 \n3️⃣ 𝖡𝗎𝗒 𝖺𝖼𝖼𝗈𝗎𝗇𝗍\n4️⃣ 𝖦𝖾𝗍 𝗇𝗎𝗆𝖻𝖾𝗋 & 𝖫𝗈𝗀𝗂𝗇 𝗍𝗁𝗋𝗈𝗎𝗀𝗁 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝗈𝗋 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖷\n5️⃣ 𝖱𝖾𝖼𝖾𝗂𝗏𝖾 𝖮𝖳𝖯 & 𝗒𝗈𝗎'𝗋𝖾 𝖣𝗈𝗇𝖾 !</blockquote>"
-        "🚀 𝖤𝗇𝗃𝗈𝗒 𝖥𝖺𝗌𝗍 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖻𝗎𝗒𝗂𝗇𝗀 𝖤𝗑𝗉𝖾𝗋𝗂𝖾𝗇𝖼𝖾!"
-    )
-
+    "<b>⚡ ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖡𝗈𝗍 🥂</b>\n\n"
+    "<blockquote expandable>• 𝖠𝗎𝗍𝗈 𝖮𝖳𝖯𝗌 📲\n"
+    "• 𝖤𝖺𝗌𝗒 𝗎𝗌𝖾 ✨\n"
+    "• 24/7 𝖲𝗎𝗉𝗉𝗈𝗋𝗍 👨‍🔧\n"
+    "• 𝖨𝗇𝗌𝗍𝖺𝗇𝗍 𝖯𝖺𝗒𝗆𝖾𝗇𝗍 ✅</blockquote>\n\n"
+    "<blockquote expandable><b>🚀 𝗁𝗈𝗐 𝗍𝗈 𝗎𝗌𝖾 :</b>\n"
+    "1️⃣ 𝖱𝖾𝖼𝗁𝖺𝗋𝗀𝖾\n"
+    "2️⃣ 𝖢𝗁𝗈𝗈𝗌𝖾 𝖢𝗈𝗎𝗇𝗍𝗋𝗒\n"
+    "3️⃣ 𝖡𝗎𝗒 𝖠𝖼𝖼𝗈𝗎𝗇𝗍\n"
+    "4️⃣ 𝖫𝗈𝗀𝗂𝗇 & 𝖦𝖾𝗍 𝖮𝖳𝖯\n"
+    "✅ 𝖠𝗅𝗅 𝖣𝗈𝗇𝖾!</blockquote>\n\n"
+    "💫 𝖤𝗇𝗃𝗈𝗒 𝗌𝗆𝗈𝗈𝗍𝗁 𝖺𝗎𝗍𝗈𝗆𝖺𝗍𝖾𝖽 𝖻𝗎𝗒𝗂𝗇𝗀!"
+        )
     kb = InlineKeyboardBuilder()
     kb.row(
         InlineKeyboardButton(text="💵 Balance", callback_data="balance"),
@@ -186,7 +190,7 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/II_SPEED_II")
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/ITZ_MEH_SPEED")
     )
     kb.row(
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),

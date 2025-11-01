@@ -9,14 +9,14 @@ def _getenv(name: str, default: str | None = None, required: bool = False) -> st
         raise RuntimeError(f"Missing required env var: {name}")
     return val
     
-MUST_JOIN_CHANNEL = "@tgaccbototp"
-LOG_CHANNEL= "@tgaccbototp"
+MUST_JOIN_CHANNEL = "@TG_IDS_VAULT"
+LOG_CHANNEL= "@TG_IDS_VAULT"
 BOT_TOKEN = _getenv("BOT_TOKEN", required=True)
 ADMIN_IDS = [int(i) for i in _getenv("ADMIN_IDS", "", required=True).replace(" ", "").split(",") if i]
 API_ID = "21377358"
 API_HASH = "e05bc1f4f03839db7864a99dbf72d1cd"
 
-DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://Hkbots:Hk2558@hkbots.wqsuua0.mongodb.net/?retryWrites=true&w=majority&appName=HKBOTS")
+DATABASE_URL = _getenv("DATABASE_URL", "mongodb+srv://GOJO49:GOJO49@nobita-gojo.sbj0bfw.mongodb.net/?retryWrites=true&w=majority&appName=NOBITA-GOJO")
 
 PROVIDER_PARAM_APIKEY = _getenv("PROVIDER_PARAM_APIKEY", "api_key")
 PROVIDER_PARAM_SERVICE = _getenv("PROVIDER_PARAM_SERVICE", "service")

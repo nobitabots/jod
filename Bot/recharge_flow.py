@@ -187,7 +187,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
         text = (
             "🔝 Send INR on this QR Code.\n"
-            "💳 Or Pay To:\n\n<code>7548966577@ibl</code>\n"
+            "💳 Or Pay To:\n\n<code>gyaneshpatel@naviaxis</code>\n"
             "✅ After Payment, Click Deposit Button."
         )
 

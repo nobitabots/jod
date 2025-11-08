@@ -72,7 +72,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             "In Manual Method, your payment will be processed via admin approval."
         )
 
-        await bot.edit_message_text(
+        await bot.edit_message_text(ka 
             text=text,
             chat_id=cq.from_user.id,
             message_id=msg_id,
@@ -178,7 +178,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
         except:
             pass
 
-        qr_image = "https://files.catbox.moe/9ukjox.jpg"
+        qr_image = "https://files.catbox.moe/38ivuz.jpg"
 
         kb = InlineKeyboardBuilder()
         kb.button(text="Deposit", callback_data="send_deposit")
@@ -187,7 +187,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
         text = (
             "🔝 Send INR on this QR Code.\n"
-            "💳 Or Pay To:\n\n<code>aamirboss61@oksbi</code>\n"
+            "💳 Or Pay To:\n\n<code>7548966577@ibl</code>\n"
             "✅ After Payment, Click Deposit Button."
         )
 
@@ -261,7 +261,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
 
                 await cq.message.edit_text(
                     f"✅ Your payment request of {value} has been sent to the admin.\n"
-                    "Please wait for approval or DM @WARRIORGAMING9 for faster approvals."
+                    "Please wait for approval or DM @E_N_I_G_M_A_29 for faster approvals."
                 )
                 await state.clear()
 

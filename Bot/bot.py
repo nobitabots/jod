@@ -190,7 +190,7 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/ITZ_MEH_SPEED")
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/E_N_I_G_M_A_29")
     )
     kb.row(
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
@@ -255,7 +255,7 @@ async def send_country_menu(message, previous=""):
     kb.adjust(2)
 
     if previous:
-        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/ITZ_MEH_SPEED"))
+        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/E_N_I_G_M_A_29"))
 
     # Send a new message for country selection (do not edit the start message)
     country_msg = await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
@@ -372,7 +372,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
     # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
         await msg.answer(
-            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @ITZ_MEH_SPEED</blockquote>"
+            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @E_N_I_G_M_A_29</blockquote>"
         )
         # start OTP listener in background
         asyncio.create_task(otp_listener(num, msg.from_user.id))

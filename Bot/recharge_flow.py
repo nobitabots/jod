@@ -72,7 +72,7 @@ def register_recharge_handlers(dp, bot, users_col, txns_col, ADMIN_IDS):
             "In Manual Method, your payment will be processed via admin approval."
         )
 
-        await bot.edit_message_text(ka 
+        await bot.edit_message_text(
             text=text,
             chat_id=cq.from_user.id,
             message_id=msg_id,

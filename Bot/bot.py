@@ -185,9 +185,6 @@ async def cmd_start(m: Message):
         InlineKeyboardButton(text="🛒 Buy Account", callback_data="buy")
     )
     kb.row(
-        InlineKeyboardButton(text="💸 Sell Account", callback_data="sell")
-    )
-    kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
         InlineKeyboardButton(text="🛠️ Support", url="https://t.me/ll_TOXICC_PAPA_ll")
     )
@@ -263,8 +260,12 @@ async def send_country_menu(message, previous=""):
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
+    
+
+
     # Send a new message for countries menu
     await send_country_menu(cq.message, previous="buy")
+
 
 
 @dp.callback_query(F.data.startswith("country:"))

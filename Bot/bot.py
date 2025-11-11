@@ -130,7 +130,7 @@ async def otp_listener(number_doc, user_id):
 
 
 # === your channel usernames ===
-REQUIRED_CHANNELS = ["@buyfrombototp"]
+REQUIRED_CHANNELS = ["@TG_IDS_VAULT"]
 
 @dp.message(Command("start"))
 async def cmd_start(m: Message):

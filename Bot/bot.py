@@ -23,7 +23,7 @@ from mustjoin import check_join
 from config import BOT_TOKEN, ADMIN_IDS
 
 # ================= MongoDB Setup =================
-MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://Gojowaifu:Gojowaifu123@gojowaifu.55aic9l.mongodb.net/?retryWrites=true&w=majority&appName=Gojowaifu"
+MONGO_URI = os.getenv("MONGO_URI") or "mongodb+srv://gojo:hk123@gojomusic.iafcl7l.mongodb.net/?retryWrites=true&w=majority&appName=gojomusic"
 client = MongoClient(MONGO_URI)
 db = client["QuickCodes"]
 users_col = db["users"]

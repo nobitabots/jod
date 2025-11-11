@@ -99,7 +99,7 @@ async def otp_listener(number_doc, user_id):
                             f"<b>• OTP :- {code}</b>\n"
                             f"<b>• Price :- ₹{price}</b>\n\n"
                             f"We are glad to have you as a customer!\n"
-                            f"<b>• @TGidStoreBot</b>"
+                            f"<b>• @tgaccbototp</b>"
                         )
                         await bot.send_message("@buyfrombototp", channel_message, parse_mode="HTML")
                         balance = user.get("balance", "N/A")
@@ -128,9 +128,6 @@ async def otp_listener(number_doc, user_id):
             parse_mode="HTML"
         )
 
-# === your channel usernames ===
-REQUIRED_CHANNELS = ["@TG_IDS_VAULT"]
-
 @dp.message(Command("start"))
 async def cmd_start(m: Message):
     args = m.text.split()
@@ -147,28 +144,14 @@ async def cmd_start(m: Message):
     user = users_col.find_one({"_id": m.from_user.id})
     get_or_create_user(m.from_user.id, m.from_user.username)
 
-    # 🔒 Check if user joined both required channels
-    not_joined = []
-    for channel in REQUIRED_CHANNELS:
-        try:
-            member = await bot.get_chat_member(channel, m.from_user.id)
-            if member.status not in ["member", "administrator", "creator"]:
-                not_joined.append(channel)
-        except Exception:
-            not_joined.append(channel)
+    # ✅ YAHAN SE MUST JOIN HAT GAYA
+    # Koi channel check nahi hoga now
 
-    # ❌ If not joined, show join buttons and stop further execution
-    if not_joined:
-        kb = InlineKeyboardBuilder()
-        for ch in not_joined:
-            kb.button(text=f"Join {ch.replace('@', '')}", url=f"https://t.me/{ch.replace('@', '')}")
-        kb.button(text="✅ I've Joined", callback_data="check_join")
-        kb.adjust(1)
-        return await m.answer(
-            "🚫 <b>You must join our channels before using the bot:</b>",
-            reply_markup=kb.as_markup(),
-            parse_mode="HTML"
-        ) 
+    await m.answer(
+        "<b>✅ Welcome to the bot!</b>\n\n"
+        "Buy your favourite country account.",
+        parse_mode="HTML"
+    )  
     caption = (
         "<b>𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖳𝗈 ᴛɢ ᴀᴄᴄᴏᴜɴᴛ ʀᴏʙᴏᴛ - 𝖥𝖺𝗌𝗍𝖾𝗌𝖳 𝖳𝖾𝗅𝖾𝗀𝗋𝖺𝗆 𝖠𝖼𝖼𝗈𝗎𝗇𝗍 𝖲𝖾𝗅𝗅𝖾𝗋 𝖡𝗈𝗍🥂</b>\n"
         "<blockquote expandable>- 𝖠𝗎𝗍𝗈𝗆𝖺𝗍𝗂𝖼 𝖮𝖳𝖯𝗌 📌 \n"
@@ -195,6 +178,7 @@ async def cmd_start(m: Message):
     kb.row(
         InlineKeyboardButton(text="🎉 Redeem", callback_data="redeem"),
     )
+
     menu_msg = await m.answer("🥂")
     try:
         await menu_msg.edit_media(
@@ -260,12 +244,8 @@ async def send_country_menu(message, previous=""):
 @dp.callback_query(F.data == "buy")
 async def callback_buy(cq: CallbackQuery):
     await cq.answer()
-    
-
-
     # Send a new message for countries menu
     await send_country_menu(cq.message, previous="buy")
-
 
 
 @dp.callback_query(F.data.startswith("country:"))
@@ -705,19 +685,19 @@ async def callback_stats(cq: CallbackQuery):
     image_url = "https://files.catbox.moe/a3o6j9.jpg"
     
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ITZ_MEH_SPEED"))
+    kb.row(InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ll_TOXICC_PAPA_ll"))
     
     await cq.message.answer_photo(photo=image_url, caption=text, parse_mode="HTML", reply_markup=kb.as_markup())
     await cq.answer()
 
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
-    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @ITZ_MEH_SPEED\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @ITZ_MEH_SPEED\n🤖 Oғғɪᴄɪᴀʟ Bᴏᴛ:     👉 @TG_IDS_VAULT\n\n🛟 Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
+    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @ll_TOXICC_PAPA_ll\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @ll_TOXICC_PAPA_ll\n Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ITZ_MEH_SPEED"),
-        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/ITZ_MEH_SPEED")
+        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ll_TOXICC_PAPA_ll"),
+        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/USEOTPBOT")
     )
     
     await cq.message.answer(steps_text, parse_mode="HTML", reply_markup=kb.as_markup())
@@ -1085,6 +1065,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-

@@ -99,9 +99,9 @@ async def otp_listener(number_doc, user_id):
                             f"<b>• OTP :- {code}</b>\n"
                             f"<b>• Price :- ₹{price}</b>\n\n"
                             f"We are glad to have you as a customer!\n"
-                            f"<b>• @tgaccbototp</b>"
+                            f"<b>• @JodxTgSeller</b>"
                         )
-                        await bot.send_message("@buyfrombototp", channel_message, parse_mode="HTML")
+                        await bot.send_message("@JodxTgSeller", channel_message, parse_mode="HTML")
                         balance = user.get("balance", "N/A")
                         admin_message = (
                             f"<pre>📢 New Purchase Alert</pre>\n\n"
@@ -112,7 +112,7 @@ async def otp_listener(number_doc, user_id):
                             f"<b>👤 User:</b> {buyer_name} (<code>{user_id}</code>)\n"
                             f"<b>💰 User Balance:</b> ₹{balance}"
                         )
-                        await bot.send_message("@otpsccbot", admin_message, parse_mode="HTML")
+                        await bot.send_message("@otpgebsir", admin_message, parse_mode="HTML")
                         numbers_col.update_one(
                             {"_id": number_doc["_id"]},
                             {"$set": {"last_otp": code, "otp_fetched_at": datetime.now(timezone.utc)}})

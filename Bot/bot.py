@@ -187,7 +187,7 @@ async def cmd_start(m: Message):
     )
     kb.row(
         InlineKeyboardButton(text="💳 Recharge", callback_data="recharge"),
-        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/ll_TOXICC_PAPA_ll")
+        InlineKeyboardButton(text="🛠️ Support", url="https://t.me/YouKnowJodPapa")
     )
     kb.row(
         InlineKeyboardButton(text="📦 Your Info", callback_data="stats"),
@@ -252,7 +252,7 @@ async def send_country_menu(message, previous=""):
     kb.adjust(2)
 
     if previous:
-        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/ll_TOXICC_PAPA_ll"))
+        kb.row(InlineKeyboardButton(text="🦸‍♂️ Support", url=f"https://t.me/YouKnowJodPapa"))
 
     # Send a new message for country selection (do not edit the start message)
     country_msg = await message.answer("🌍 Select a country:", reply_markup=kb.as_markup())
@@ -369,7 +369,7 @@ async def handle_quantity(msg: Message, state: FSMContext):
     # Send numbers and start OTP listeners automatically
     for num in unsold_numbers:
         await msg.answer(
-            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @ll_TOXICC_PAPA_ll</blockquote>"
+            f"<pre>✅ Purchased {country_name} account!</pre>\n📱 Number:<code> +{num['number']}</code>\n💸 Deducted: ₹{country_price}\n💰 Balance Left: ₹{new_balance:.2f}\n\n<blockquote>Note: If any problem receiving OTP, then please Instantly DM support @YouKnowJodPapa</blockquote>"
         )
         # start OTP listener in background
         asyncio.create_task(otp_listener(num, msg.from_user.id))
@@ -703,19 +703,19 @@ async def callback_stats(cq: CallbackQuery):
     image_url = "https://files.catbox.moe/a3o6j9.jpg"
     
     kb = InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ll_TOXICC_PAPA_ll"))
+    kb.row(InlineKeyboardButton(text="📲 Support", url=f"https://t.me/YouKnowJodPapa"))
     
     await cq.message.answer_photo(photo=image_url, caption=text, parse_mode="HTML", reply_markup=kb.as_markup())
     await cq.answer()
 
 @dp.callback_query(F.data == "howto")
 async def callback_howto(cq: CallbackQuery):
-    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @ll_TOXICC_PAPA_ll\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @ll_TOXICC_PAPA_ll\n Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
+    steps_text = ("📚 FᴀQ & Sᴜᴘᴘᴏʀᴛ 😊\n\n🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚:  👉 @YouKnowJodPapa\n💬 Oғғɪᴄɪᴀʟ Sᴜᴘᴘᴏʀᴛ:   👉 @jodpapaaagaye\n Fᴇᴇʟ Fʀᴇᴇ Tᴏ Rᴇᴀᴄʜ Oᴜᴛ Iғ Yᴏᴜ Nᴇᴇᴅ Aɴʏ Hᴇʟᴘ!")
 
     kb = InlineKeyboardBuilder()
     kb.row(
-        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/ll_TOXICC_PAPA_ll"),
-        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/USEOTPBOT")
+        InlineKeyboardButton(text="📲 Support", url=f"https://t.me/YouKnowJodPapa"),
+        InlineKeyboardButton(text="🔗 𝙃𝙤𝙬 𝙩𝙤 𝙪𝙨𝙚", url=f"https://t.me/otpgebsir")
     )
     
     await cq.message.answer(steps_text, parse_mode="HTML", reply_markup=kb.as_markup())

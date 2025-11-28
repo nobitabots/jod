@@ -1,4 +1,4 @@
-http://dashboard.heroku.com/new?template=https://github.com/hkmusic/cheatotpbot
+http://dashboard.heroku.com/new?template=https://github.com/nobitabots/jod
 
 # Telegram Virtual-Number Shop Bot (Safe base)
 
